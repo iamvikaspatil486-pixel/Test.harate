@@ -2,168 +2,182 @@
 <html lang="en">
 
 <head>
-<meta charset="UTF-8">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AGASTYANS Chat</title>
 
-<!-- Prevent zooming -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 
-<title>AGASTYANS Chat</title>
+  <!-- supabase.js must load first (sets window.db), then chat.js -->
+  <script src="supabase.js"></script>
+  <script defer src="chat.js"></script>
 
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-<script src="supabase.js"></script>
-<script src="chat.js"></script>
+  <style>
+    * { box-sizing: border-box; }
 
-<style>
-* {
-    box-sizing: border-box;
-}
+    html, body {
+      margin: 0;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      background: #0f172a;
+      font-family: sans-serif;
+      overflow: hidden;
+    }
 
-html, body {
-    margin: 0;
-    height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    background: #0f172a;
-    font-family: sans-serif;
-    overflow: hidden;
-}
+    /* HEADER */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      color: white;
+      border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
+    }
 
-/* header */
-.header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    color: white;
-    border-bottom: 1px solid #1e293b;
-    flex-shrink: 0;
-}
+    /* MESSAGES */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      padding-bottom: 130px; /* enough room for bottom bar */
+      color: white;
+      scroll-behavior: smooth;
+    }
 
-/* messages */
-.messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    padding-bottom: 90px;
-    color: white;
-    scroll-behavior: smooth;
-}
+    /* BOTTOM CHAT */
+    .bottom-chat {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: #0f172a;
+      border-top: 1px solid #1e293b;
+      padding: 8px 12px;
+      padding-bottom: calc(8px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
 
-/* bottom chat */
-.bottom-chat {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: #0f172a;
-    border-top: 1px solid #1e293b;
-    padding: 8px 12px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
+    /* REPLY PREVIEW */
+    #replyPreview {
+      display: none;
+      font-size: 12px;
+      color: #94a3b8;
+      background: #1e293b;
+      padding: 6px 10px;
+      border-left: 3px solid #3b82f6;
+      border-radius: 6px;
+    }
 
-/* 🔥 REPLY PREVIEW */
-#replyPreview {
-    display: none;
-    font-size: 12px;
-    color: #94a3b8;
-    background: #1e293b;
-    padding: 6px 10px;
-    border-left: 3px solid #3b82f6;
-    border-radius: 6px;
-}
+    /* ICON ROW */
+    .action-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
 
-/* icons row */
-.action-row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
+    /* MESSAGE INPUT ROW */
+    .msg-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
 
-/* message input row */
-.msg-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
+    .msg-input {
+      flex: 1;
+      min-width: 0;
+      background: #1e293b;
+      border: none;
+      border-radius: 25px;
+      padding: 10px 14px;
+      color: white;
+      outline: none;
+      font-size: 15px;
+    }
 
-.msg-input {
-    flex: 1;
-    min-width: 0;
-    background: #1e293b;
-    border: none;
-    border-radius: 25px;
-    padding: 10px 14px;
-    color: white;
-    outline: none;
-}
+    .msg-input::placeholder { color: #64748b; }
 
-/* icons */
-.icon {
-    font-size: 22px;
-    color: white;
-    cursor: pointer;
-}
+    /* ICONS */
+    .icon {
+      font-size: 22px;
+      color: white;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      line-height: 1;
+    }
 
-/* send button */
-.send-btn {
-    font-size: 22px;
-    color: #3b82f6;
-    cursor: pointer;
-}
+    /* SEND BUTTON */
+    .send-btn {
+      font-size: 22px;
+      color: #3b82f6;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      margin-left: auto;
+      line-height: 1;
+    }
 
-/* gif fix */
-#gifBtn {
-    flex-shrink: 0;
-}
-</style>
+    /* RECORDING INDICATOR */
+    #voiceBtn.recording {
+      color: #ef4444;
+      animation: pulse 1s infinite;
+    }
 
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+  </style>
 </head>
 
 <body>
 
-<!-- HEADER -->
-<div class="header">
-    <button onclick="history.back()">←</button>
-    <h2 class="font-bold">AGASTYANS</h2>
-    <div id="onlineCount"></div>
-    <button class="text-red-400">Logout</button>
-</div>
+  <!-- HEADER -->
+  <div class="header">
+    <button onclick="history.back()" style="background:none;border:none;color:white;font-size:18px;cursor:pointer;">←</button>
+    <h2 class="font-bold" style="color:white;margin:0;">AGASTYANS</h2>
+    <div id="onlineCount" style="color:#94a3b8;font-size:13px;"></div>
+    <button class="text-red-400" style="background:none;border:none;cursor:pointer;"
+      onclick="localStorage.removeItem('anon_user'); location.reload()">
+      Logout
+    </button>
+  </div>
 
-<!-- MESSAGES -->
-<div class="messages"></div>
+  <!-- MESSAGES -->
+  <div class="messages"></div>
 
-<!-- BOTTOM CHAT -->
-<div class="bottom-chat">
+  <!-- BOTTOM CHAT -->
+  <div class="bottom-chat">
 
-    <!-- 🔥 REPLY PREVIEW UI -->
+    <!-- REPLY PREVIEW (hidden until replying) -->
     <div id="replyPreview"></div>
 
     <!-- ICON ROW -->
     <div class="action-row">
-        <label class="icon">
-            🖼
-            <input type="file" hidden accept="image/*">
-        </label>
+      <label class="icon" title="Send image">
+        🖼
+        <input type="file" hidden accept="image/*">
+      </label>
 
-        <button id="voiceBtn" class="icon">🎤</button>
+      <button id="voiceBtn" class="icon" title="Voice message">🎤</button>
 
-        <!-- GIF BUTTON -->
-        <button id="gifBtn" class="icon">GIF</button>
-
-        <!-- SEND BUTTON -->
-        <button id="sendBtn" class="send-btn">➤</button>
+      <button id="gifBtn" class="icon" title="GIF" style="font-size:13px;font-weight:bold;letter-spacing:-0.5px;">GIF</button>
     </div>
 
     <!-- MESSAGE INPUT -->
     <div class="msg-row">
-        <input id="msgInput" type="text" placeholder="Message..." class="msg-input" />
+      <input id="msgInput" type="text" placeholder="Message..." class="msg-input" autocomplete="off" />
+      <button id="sendBtn" class="send-btn" title="Send">➤</button>
     </div>
 
-</div>
+  </div>
 
 </body>
 </html>
