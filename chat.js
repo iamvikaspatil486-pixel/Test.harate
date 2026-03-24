@@ -14,9 +14,7 @@ return
 
 const db = window.db
 
-/* ========================= */
 /* USER */
-/* ========================= */
 
 let storedUser = null
 try{
@@ -34,103 +32,6 @@ const userId = storedUser.id
 
 let longPressTimer = null
 let replyTo = null
-
-/* ========================= */
-/* IMAGE UPLOAD */
-/* ========================= */
-
-fileInput.addEventListener("change", async (e) => {
-
-const file = e.target.files[0]
-if (!file) return
-
-const fileName = `chat/${Date.now()}-${file.name}`
-
-const { error } = await db.storage
-.from("chat-images")
-.upload(fileName, file)
-
-if (error) {
-console.error(error)
-alert("Image upload failed")
-return
-}
-
-const { data } = db.storage
-.from("chat-images")
-.getPublicUrl(fileName)
-
-const url = data.publicUrl
-
-displayMessage({
-id: Date.now(),
-username,
-media_url: url
-})
-
-await db.from("chat_messages").insert({
-user_id: userId,
-username,
-media_url: url,
-reply_to: replyTo
-})
-
-replyTo = null
-fileInput.value = ""
-})
-
-/* ========================= */
-/* GIPHY */
-/* ========================= */
-
-const GIPHY_API_KEY = "YOUR_API_KEY_HERE"
-
-gifBtn.onclick = openGifPicker
-
-async function openGifPicker(){
-
-const overlay = document.createElement("div")
-overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999"
-
-const box = document.createElement("div")
-box.style = "position:absolute;bottom:0;width:100%;height:50%;background:#0f172a;overflow-y:scroll;padding:10px"
-
-overlay.appendChild(box)
-document.body.appendChild(overlay)
-
-const res = await fetch(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`)
-const data = await res.json()
-
-data.data.forEach(gif => {
-
-const img = document.createElement("img")
-img.src = gif.images.fixed_height.url
-img.style = "width:100px;margin:5px;border-radius:10px"
-
-img.onclick = async () => {
-
-displayMessage({
-id: Date.now(),
-username,
-media_url: gif.images.fixed_height.url
-})
-
-await db.from("chat_messages").insert({
-user_id: userId,
-username,
-media_url: gif.images.fixed_height.url,
-reply_to: replyTo
-})
-
-replyTo = null
-overlay.remove()
-}
-
-box.appendChild(img)
-})
-
-overlay.onclick = () => overlay.remove()
-}
 
 /* ========================= */
 /* DISPLAY MESSAGE */
@@ -159,7 +60,7 @@ ${mediaHTML}
 </div>
 `
 
-/* 🔥 SWIPE REPLY */
+/* 🔥 SWIPE + LONG PRESS */
 let startX = 0
 
 div.addEventListener("touchstart", (e) => {
@@ -192,7 +93,7 @@ loadReactions(msg.id, div)
 }
 
 /* ========================= */
-/* SEND TEXT */
+/* SEND MESSAGE */
 /* ========================= */
 
 async function sendMessage(){
@@ -220,23 +121,6 @@ input.value = ""
 }
 
 /* ========================= */
-/* LOAD MESSAGES */
-/* ========================= */
-
-async function loadMessages(){
-
-const { data } = await db
-.from("chat_messages")
-.select("*")
-.order("created_at", { ascending: true })
-
-messages.innerHTML = ""
-data.forEach(displayMessage)
-}
-
-loadMessages()
-
-/* ========================= */
 /* REALTIME CHAT */
 /* ========================= */
 
@@ -251,25 +135,23 @@ displayMessage(payload.new)
 .subscribe()
 
 /* ========================= */
-/* 🔥 REALTIME REACTIONS FIX */
+/* 🔥 FIXED REALTIME REACTIONS */
 /* ========================= */
 
 db.channel("reactions-live")
 .on("postgres_changes",
 { event: "*", schema: "public", table: "reactions" },
-() => {
-refreshAllReactions()
+(payload) => {
+updateReactionUI(payload.new)
 })
 .subscribe()
 
-async function refreshAllReactions(){
+function updateReactionUI(reaction){
 
-const allMessages = document.querySelectorAll("[data-id]")
+const msgDiv = document.querySelector(`[data-id="${reaction.message_id}"]`)
+if(!msgDiv) return
 
-allMessages.forEach(msgDiv => {
-const id = msgDiv.getAttribute("data-id")
-loadReactions(id, msgDiv)
-})
+loadReactions(reaction.message_id, msgDiv)
 }
 
 /* ========================= */
@@ -281,7 +163,7 @@ function showReactions(messageId){
 const old = document.getElementById("reaction-overlay")
 if(old) old.remove()
 
-const emojis = ["❤️","😂","🖕","💯","🔥","👍",]
+const emojis = ["❤️","😂","🔥","👍","💯"]
 
 const overlay = document.createElement("div")
 overlay.id = "reaction-overlay"
@@ -301,7 +183,9 @@ btn.style.fontSize = "22px"
 btn.onclick = async (e) => {
 e.stopPropagation()
 
-await db.from("reactions").delete()
+// 🔥 ONE REACTION PER USER
+await db.from("reactions")
+.delete()
 .eq("message_id", messageId)
 .eq("user_id", userId)
 
@@ -310,6 +194,9 @@ message_id: messageId,
 user_id: userId,
 emoji
 })
+
+// 🔥 INSTANT UI UPDATE
+updateReactionUI({ message_id: messageId })
 
 overlay.remove()
 }
@@ -334,6 +221,7 @@ const { data } = await db
 
 if(!data) return
 
+// remove old
 const old = container.querySelector(".reaction-box")
 if(old) old.remove()
 
