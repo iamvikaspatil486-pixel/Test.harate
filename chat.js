@@ -68,8 +68,6 @@ document.addEventListener("DOMContentLoaded", () => {
     div.className = "mb-3"
     div.setAttribute("data-id", msg.id)
 
-    const isOwn = msg.user_id === userId
-
     let replyHTML = msg.reply_to
       ? `<div style="font-size:11px;color:#94a3b8;border-left:2px solid #3b82f6;padding-left:6px;margin-bottom:4px;">↩ ${msg.reply_to}</div>`
       : ""
@@ -78,13 +76,11 @@ document.addEventListener("DOMContentLoaded", () => {
       ? `<img src="${msg.media_url}" style="max-width:200px;border-radius:10px;margin-top:5px;">`
       : ""
 
-    div.style.textAlign = isOwn ? "right" : "left"
-
     div.innerHTML = `
       <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">${msg.username}</div>
       ${replyHTML}
       <div style="
-        background:${isOwn ? "#3b82f6" : "#1e293b"};
+        background:#1e293b;
         color:white;
         padding:10px 14px;
         border-radius:14px;
@@ -353,7 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadReactions(messageId, container) {
     const { data, error } = await db
       .from("reactions")
-      .select("emoji")
+      .select("emoji, user_id")
       .eq("message_id", messageId)
 
     if (error || !data) return
@@ -362,7 +358,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (old) old.remove()
 
     const counts = {}
-    data.forEach(r => { counts[r.emoji] = (counts[r.emoji] || 0) + 1 })
+    let myReactionEmoji = null
+
+    data.forEach(r => {
+      counts[r.emoji] = (counts[r.emoji] || 0) + 1
+      if (r.user_id === userId) myReactionEmoji = r.emoji
+    })
 
     if (Object.keys(counts).length === 0) return
 
@@ -371,12 +372,26 @@ document.addEventListener("DOMContentLoaded", () => {
     reactionDiv.style = "display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;"
 
     Object.entries(counts).forEach(([emoji, count]) => {
+      const isMine = emoji === myReactionEmoji
       const span = document.createElement("span")
-      span.style = "background:#1e293b;padding:2px 8px;border-radius:20px;font-size:13px;cursor:pointer;"
+      // Highlight the current user's chosen reaction in blue
+      span.style = `background:${isMine ? "#3b82f6" : "#1e293b"};border:1px solid ${isMine ? "#60a5fa" : "transparent"};padding:2px 8px;border-radius:20px;font-size:13px;cursor:pointer;`
       span.innerText = `${emoji} ${count}`
 
-      // Tap reaction pill to toggle your reaction
-      span.onclick = () => showReactions(messageId)
+      span.onclick = async () => {
+        if (isMine) {
+          // Tap own reaction to remove it
+          await db.from("reactions")
+            .delete()
+            .eq("message_id", messageId)
+            .eq("user_id", userId)
+          updateReactionUI({ message_id: messageId })
+        } else {
+          // Tap other reaction to switch to it
+          showReactions(messageId)
+        }
+      }
+
       reactionDiv.appendChild(span)
     })
 
