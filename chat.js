@@ -82,71 +82,80 @@ document.getElementById("cancelReply").addEventListener("click", clearReply)
 /* ========================= */
 
 function showContextMenu(msg, bubble) {
-  if (msg.user_id !== userId) return
+function showContextMenu(msg, bubble) {
+  if (msg.user_id !== userId) return;
 
-  document.getElementById("ctxMenu")?.remove()
+  // 1. Force remove any existing menu
+  const existingMenu = document.getElementById("ctxMenu");
+  if (existingMenu) existingMenu.remove();
 
-  const menu = document.createElement("div")
-  menu.id = "ctxMenu"
+  // 2. Create the menu
+  const menu = document.createElement("div");
+  menu.id = "ctxMenu";
+  
+  // FIXED CSS: Added higher z-index and fixed positioning
   menu.style = `
     position: fixed;
     background: #1e293b;
     border: 1px solid #334155;
     border-radius: 12px;
     overflow: hidden;
-    z-index: 9999;
+    z-index: 10000; 
     min-width: 140px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-  `
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    pointer-events: auto;
+  `;
 
   menu.innerHTML = `
-    <button id="ctxEdit" style="
-      display: block; width: 100%;
-      padding: 12px 16px;
-      background: none; border: none;
-      color: white; font-size: 14px;
-      text-align: left; cursor: pointer;
-      border-bottom: 1px solid #334155;
-    ">✏️ Edit</button>
-    <button id="ctxDelete" style="
-      display: block; width: 100%;
-      padding: 12px 16px;
-      background: none; border: none;
-      color: #f87171; font-size: 14px;
-      text-align: left; cursor: pointer;
-    ">🗑️ Delete</button>
-  `
+    <button id="ctxEdit" style="display:block; width:100%; padding:14px 16px; background:none; border:none; color:white; font-size:15px; text-align:left; cursor:pointer; border-bottom:1px solid #334155;">✏️ Edit</button>
+    <button id="ctxDelete" style="display:block; width:100%; padding:14px 16px; background:none; border:none; color:#f87171; font-size:15px; text-align:left; cursor:pointer;">🗑️ Delete</button>
+  `;
 
-  const rect = bubble.getBoundingClientRect()
-  let top = rect.bottom + 6
-  let left = rect.left
-  if (top + 100 > window.innerHeight) top = rect.top - 110
-  if (left + 160 > window.innerWidth) left = window.innerWidth - 160
-  menu.style.top = top + "px"
-  menu.style.left = left + "px"
+  document.body.appendChild(menu);
 
-  document.body.appendChild(menu)
+  // 3. IMPROVED POSITIONING LOGIC
+  const rect = bubble.getBoundingClientRect();
+  const menuWidth = 140;
+  const menuHeight = 100;
 
-  document.getElementById("ctxEdit").addEventListener("click", () => {
-    menu.remove()
-    if (!msg.message) return alert("Cannot edit media messages")
-    const newText = prompt("Edit message:", msg.message)
-    if (!newText || newText.trim() === msg.message) return
-    editMessage(msg.id, newText.trim(), bubble)
-  })
+  let top = rect.top + (rect.height / 2); // Start at middle of bubble
+  let left = rect.left + (rect.width / 2); // Start at middle of bubble
 
-  document.getElementById("ctxDelete").addEventListener("click", () => {
-    menu.remove()
-    if (confirm("Delete this message?")) {
-      deleteMessage(msg.id)
+  // Keep menu inside screen boundaries
+  if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 20;
+  if (top + menuHeight > window.innerHeight) top = window.innerHeight - menuHeight - 20;
+  if (left < 10) left = 10;
+  if (top < 10) top = 10;
+
+  menu.style.top = top + "px";
+  menu.style.left = left + "px";
+
+  // 4. ACTION LISTENERS
+  document.getElementById("ctxEdit").onclick = (e) => {
+    e.stopPropagation();
+    menu.remove();
+    const newText = prompt("Edit message:", msg.message);
+    if (newText && newText.trim() !== msg.message) {
+        editMessage(msg.id, newText.trim(), bubble);
     }
-  })
+  };
 
+  document.getElementById("ctxDelete").onclick = (e) => {
+    e.stopPropagation();
+    menu.remove();
+    if (confirm("Delete this message?")) {
+        deleteMessage(msg.id);
+    }
+  };
+
+  // 5. CLOSE ON OUTSIDE CLICK
   setTimeout(() => {
-    document.addEventListener("touchstart", () => menu.remove(), { once: true })
-    document.addEventListener("click", () => menu.remove(), { once: true })
-  }, 100)
+    const closeMenu = () => menu.remove();
+    window.addEventListener('click', closeMenu, { once: true });
+    window.addEventListener('touchstart', closeMenu, { once: true });
+  }, 100);
 }
+
 
 /* ========================= */
 /* EDIT MESSAGE */
