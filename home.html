@@ -184,7 +184,7 @@ lucide.createIcons()
 
     // Change 'profiles' to your actual table name
     // Change 'username' to your actual column name
-    const { data, error } = await db.from('students').select('username, avatar_url').order('username');
+    const { data, error } = await db.from('students').select('full_name, avatar_url').order('username');
 
     if (error || !data) {
       list.innerHTML = '<p class="text-red-400 text-sm text-center">Failed to load</p>';
