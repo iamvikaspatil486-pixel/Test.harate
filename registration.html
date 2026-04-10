@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Join Students Harate</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .step{display:none}
+        .step.active{display:block}
+        html, body {
+            height: 100%;
+            overflow-y: auto; /* Changed to auto to allow reading the privacy notes on small screens */
+        }
+    </style>
+</head>
+
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center px-6">
+
+<div class="w-full max-w-md my-8">
+
+    <h2 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500 mb-6 text-center">
+        Join Now
+    </h2>
+
+    <form id="registrationForm" class="space-y-4" onsubmit="handleJoinNow(event)">
+
+        <!-- STEP 1 -->
+        <div id="step1" class="step active space-y-4">
+            <input type="text" id="fullName" placeholder="Original Name"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500" required>
+
+            <input type="text" id="rollNo" placeholder="Roll No."
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500" required>
+
+            <input type="text" id="nickname" placeholder="Nickname (Optional)"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500">
+
+            <input type="email" id="email" placeholder="Email"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500" required>
+
+            <button type="button" onclick="nextStep()"
+                class="w-full py-4 bg-slate-800 border border-slate-700 rounded-2xl font-bold hover:bg-slate-700 transition">
+                Next
+            </button>
+        </div>
+
+        <!-- STEP 2 -->
+        <div id="step2" class="step space-y-4">
+            <div class="relative">
+                <input type="password" id="password" placeholder="Set Password"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500" required>
+                <button type="button" onclick="togglePassword('password')" class="absolute right-3 top-3 text-slate-400">
+                    <i id="password-icon" data-lucide="eye"></i>
+                </button>
+            </div>
+
+            <div class="relative">
+                <input type="password" id="confPass" placeholder="Confirm Password"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:border-cyan-500" required>
+                <button type="button" onclick="togglePassword('confPass')" class="absolute right-3 top-3 text-slate-400">
+                    <i id="confPass-icon" data-lucide="eye"></i>
+                </button>
+            </div>
+
+            <div class="flex gap-4">
+                <button type="button" onclick="prevStep()"
+                    class="flex-1 py-4 bg-slate-800 border border-slate-700 rounded-2xl font-bold hover:bg-slate-700 transition">
+                    Back
+                </button>
+                <button type="submit" id="submitBtn"
+                    class="flex-[2] py-4 bg-gradient-to-r from-cyan-600 to-blue-600 rounded-2xl font-bold hover:opacity-90 transition">
+                    Request Admin
+                </button>
+            </div>
+
+            <!-- ADMIN NOTE -->
+            <p class="text-xs text-slate-400 text-center mt-4 italic">
+                * Admin will approve you only if you are from Agastyans batch. This prevents login from other students.
+            </p>
+        </div>
+    </form>
+
+    <!-- TRUST & PRIVACY SECTION -->
+    <div class="mt-10 p-4 border-t border-slate-800 space-y-3">
+        <h3 class="text-sm font-semibold text-cyan-400 flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-4 h-4"></i> Security & Privacy
+        </h3>
+        <ul class="text-xs text-slate-400 space-y-2 list-disc ml-4">
+            <li>We cannot share your personal info with anyone.</li>
+            <li>You can delete your account and all your data at any time.</li>
+            <li>Email is required to reset your password if you forget it or want to login on other phones with your 'approved' account.</li>
+        </ul>
+    </div>
+
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
+<script src="register.js"></script>
+<script>
+    lucide.createIcons();
+    
+    // UI Logic for steps
+    function nextStep() {
+        document.getElementById('step1').classList.remove('active');
+        document.getElementById('step2').classList.add('active');
+    }
+    function prevStep() {
+        document.getElementById('step2').classList.remove('active');
+        document.getElementById('step1').classList.add('active');
+    }
+    function togglePassword(id) {
+        const input = document.getElementById(id);
+        const icon = document.getElementById(id + '-icon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.setAttribute('data-lucide', 'eye-off');
+        } else {
+            input.type = 'password';
+            icon.setAttribute('data-lucide', 'eye');
+        }
+        lucide.createIcons();
+    }
+</script>
+
+</body>
+</html>
+
