@@ -182,19 +182,24 @@ lucide.createIcons()
     const list = document.getElementById('studentList');
     list.innerHTML = '<p class="text-slate-500 text-sm text-center">Loading...</p>';
 
-    // Change 'profiles' to your actual table name
-    // Change 'username' to your actual column name
-    const { data, error } = await db.from('students').select('full_name, avatar_url').order('username');
+    const { data, error } = await db
+      .from('students')
+      .select('full_name, roll_no, is_approved')
+      .order('full_name');
 
-    if (error || !data) {
-      list.innerHTML = '<p class="text-red-400 text-sm text-center">Failed to load</p>';
+    if (error) {
+      list.innerHTML = `<p class="text-red-400 text-sm text-center">Error: ${error.message}</p>`;
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      list.innerHTML = '<p class="text-slate-500 text-sm text-center">No data returned</p>';
       return;
     }
 
     allStudents = data;
     renderStudents(allStudents);
   }
-
   
 function renderStudents(students) {
     const list = document.getElementById('studentList');
