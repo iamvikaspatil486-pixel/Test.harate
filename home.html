@@ -22,18 +22,52 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 <!-- HEADER -->
 <header class="sticky top-0 bg-slate-900 border-b border-slate-800 p-4 flex items-center z-50">
 
-<button onclick="window.location.href='notice.html'"
-class="text-cyan-400 font-bold mr-4">
-Notice
-</button>
+  <button onclick="window.location.href='notice.html'"
+    class="text-cyan-400 font-bold mr-4">
+    Notice
+  </button>
 
-<div class="text-center w-full">
-<h1 class="text-xl font-bold text-cyan-400">
-STUDENTS HARATE
-</h1>
-</div>
+  <div class="text-center w-full">
+    <h1 class="text-xl font-bold text-cyan-400">
+      STUDENTS HARATE
+    </h1>
+  </div>
+
+  <button onclick="openStudents()"
+    class="text-cyan-400 font-bold ml-4">
+    Students
+  </button>
 
 </header>
+
+<!-- STUDENTS MODAL -->
+<div id="studentsModal"
+  class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center px-4">
+
+  <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-sm max-h-[70vh] flex flex-col">
+
+    <!-- Modal Header -->
+    <div class="flex items-center justify-between p-4 border-b border-slate-700">
+      <h2 class="text-cyan-400 font-bold text-lg">Students</h2>
+      <button onclick="closeStudents()" class="text-slate-400 text-xl">✕</button>
+    </div>
+
+    <!-- Search -->
+    <div class="px-4 pt-3">
+      <input id="studentSearch" type="text" placeholder="Search students..."
+        oninput="filterStudents()"
+        class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2 text-sm text-white outline-none placeholder-slate-500" />
+    </div>
+
+    <!-- Student List -->
+    <div id="studentList"
+      class="overflow-y-auto flex-1 p-4 space-y-2">
+      <p class="text-slate-500 text-sm text-center">Loading...</p>
+    </div>
+
+  </div>
+
+</div>
 
 <!-- FEED -->
 <main id="feed" class="max-w-md mx-auto px-3 pt-3 pb-28 space-y-4">
@@ -129,6 +163,68 @@ class="bg-cyan-500 p-3 rounded-full text-slate-900">
 
 <script>
 lucide.createIcons()
+</script>
+<script>
+  let allStudents = [];
+
+  async function openStudents() {
+    document.getElementById('studentsModal').classList.remove('hidden');
+    await loadStudents();
+  }
+
+  function closeStudents() {
+    document.getElementById('studentsModal').classList.add('hidden');
+    document.getElementById('studentSearch').value = '';
+    filterStudents();
+  }
+
+  async function loadStudents() {
+    const list = document.getElementById('studentList');
+    list.innerHTML = '<p class="text-slate-500 text-sm text-center">Loading...</p>';
+
+    // Change 'profiles' to your actual table name
+    // Change 'username' to your actual column name
+    const { data, error } = await db.from('students').select('username, avatar_url').order('username');
+
+    if (error || !data) {
+      list.innerHTML = '<p class="text-red-400 text-sm text-center">Failed to load</p>';
+      return;
+    }
+
+    allStudents = data;
+    renderStudents(allStudents);
+  }
+
+  function renderStudents(students) {
+    const list = document.getElementById('studentList');
+
+    if (students.length === 0) {
+      list.innerHTML = '<p class="text-slate-500 text-sm text-center">No students found</p>';
+      return;
+    }
+
+    list.innerHTML = students.map(s => `
+      <div class="flex items-center gap-3 bg-slate-800 rounded-xl px-3 py-2">
+        <div class="w-9 h-9 rounded-full bg-cyan-500 flex items-center justify-center text-sm font-bold flex-shrink-0">
+          ${s.username ? s.username[0].toUpperCase() : 'U'}
+        </div>
+        <span class="text-sm font-semibold">${s.username || 'Unknown'}</span>
+      </div>
+    `).join('');
+  }
+
+  function filterStudents() {
+    const q = document.getElementById('studentSearch').value.toLowerCase();
+    const filtered = allStudents.filter(s =>
+      (s.username || '').toLowerCase().includes(q)
+    );
+    renderStudents(filtered);
+  }
+
+  // Close modal on backdrop click
+  document.getElementById('studentsModal').addEventListener('click', function(e) {
+    if (e.target === this) closeStudents();
+  });
 </script>
 
 </body>
