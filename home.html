@@ -195,7 +195,8 @@ lucide.createIcons()
     renderStudents(allStudents);
   }
 
-  function renderStudents(students) {
+  
+function renderStudents(students) {
     const list = document.getElementById('studentList');
 
     if (students.length === 0) {
@@ -206,9 +207,15 @@ lucide.createIcons()
     list.innerHTML = students.map(s => `
       <div class="flex items-center gap-3 bg-slate-800 rounded-xl px-3 py-2">
         <div class="w-9 h-9 rounded-full bg-cyan-500 flex items-center justify-center text-sm font-bold flex-shrink-0">
-          ${s.username ? s.username[0].toUpperCase() : 'U'}
+          ${s.full_name ? s.full_name[0].toUpperCase() : 'S'}
         </div>
-        <span class="text-sm font-semibold">${s.username || 'Unknown'}</span>
+        <div class="flex-1">
+          <div class="text-sm font-semibold">${s.full_name || 'Unknown'}</div>
+          <div class="text-xs text-slate-400">${s.roll_no || 'No roll no'}</div>
+        </div>
+        <div class="text-xs font-semibold px-2 py-1 rounded-full ${s.is_approved === 'true' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}">
+          ${s.is_approved === 'true' ? '✓ Approved' : 'Not Approved Yet'}
+        </div>
       </div>
     `).join('');
   }
