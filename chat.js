@@ -1,579 +1,549 @@
 document.addEventListener("DOMContentLoaded", () => {
 
-  const input        = document.getElementById("msgInput")
-  const sendBtn      = document.getElementById("sendBtn")
-  const voiceBtn     = document.getElementById("voiceBtn")
-  const messages     = document.querySelector(".messages")
-  const fileInput    = document.querySelector('input[type="file"]')
-  const gifBtn       = document.getElementById("gifBtn")
-  const replyPreview = document.getElementById("replyPreview")
+const db = window.db
 
-  if (!input || !sendBtn || !messages) {
-    console.error("UI elements missing")
+const input = document.getElementById("msgInput")
+const sendBtn = document.getElementById("sendBtn")
+const voiceBtn = document.getElementById("voiceBtn")
+const messages = document.querySelector(".messages")
+const fileInput = document.querySelector('input[type="file"]')
+const gifBtn = document.getElementById("gifBtn")
+
+if(!input || !sendBtn || !messages){
+console.error("UI elements missing")
+return
+}
+
+/* ========================= */
+/* USER */
+/* ========================= */
+
+let storedUser = null
+try{
+storedUser = JSON.parse(localStorage.getItem("anon_user"))
+}catch(e){}
+
+const username = storedUser?.name || "User_" + Math.floor(Math.random()*1000)
+const userId = storedUser?.id || crypto.randomUUID()
+
+/* ========================= */
+/* REPLY STATE */
+/* ========================= */
+
+let replyTo = null
+
+function setReply(msg) {
+  replyTo = msg
+  const bar = document.getElementById("replyBar")
+  const replyName = document.getElementById("replyName")
+  const replyText = document.getElementById("replyPreview")
+  replyName.textContent = msg.username
+  replyText.textContent = msg.message || "📷 Media"
+  bar.style.display = "flex"
+  input.focus()
+}
+
+function clearReply() {
+  replyTo = null
+  document.getElementById("replyBar").style.display = "none"
+}
+
+/* ========================= */
+/* REPLY BAR */
+/* ========================= */
+
+const replyBar = document.createElement("div")
+replyBar.id = "replyBar"
+replyBar.style = `
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  background: #1e293b;
+  border-left: 3px solid #3b82f6;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  gap: 8px;
+`
+replyBar.innerHTML = `
+  <div style="flex:1;overflow:hidden">
+    <div id="replyName" style="font-size:11px;color:#3b82f6;font-weight:bold;"></div>
+    <div id="replyPreview" style="font-size:12px;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+  </div>
+  <button id="cancelReply" style="color:#9ca3af;font-size:18px;flex-shrink:0;">✕</button>
+`
+
+const bottomChat = document.querySelector(".bottom-chat")
+bottomChat.insertBefore(replyBar, bottomChat.firstChild)
+document.getElementById("cancelReply").addEventListener("click", clearReply)
+
+/* ========================= */
+/* CONTEXT MENU (hold menu) */
+/* ========================= */
+
+function showContextMenu(msg, bubble) {
+  if (msg.user_id !== userId) return
+
+  document.getElementById("ctxMenu")?.remove()
+
+  const menu = document.createElement("div")
+  menu.id = "ctxMenu"
+  menu.style = `
+    position: fixed;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    overflow: hidden;
+    z-index: 9999;
+    min-width: 140px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  `
+
+  menu.innerHTML = `
+    <button id="ctxEdit" style="
+      display: block; width: 100%;
+      padding: 12px 16px;
+      background: none; border: none;
+      color: white; font-size: 14px;
+      text-align: left; cursor: pointer;
+      border-bottom: 1px solid #334155;
+    ">✏️ Edit</button>
+    <button id="ctxDelete" style="
+      display: block; width: 100%;
+      padding: 12px 16px;
+      background: none; border: none;
+      color: #f87171; font-size: 14px;
+      text-align: left; cursor: pointer;
+    ">🗑️ Delete</button>
+  `
+
+  const rect = bubble.getBoundingClientRect()
+  let top = rect.bottom + 6
+  let left = rect.left
+  if (top + 100 > window.innerHeight) top = rect.top - 110
+  if (left + 160 > window.innerWidth) left = window.innerWidth - 160
+  menu.style.top = top + "px"
+  menu.style.left = left + "px"
+
+  document.body.appendChild(menu)
+
+  document.getElementById("ctxEdit").addEventListener("click", () => {
+    menu.remove()
+    if (!msg.message) return alert("Cannot edit media messages")
+    const newText = prompt("Edit message:", msg.message)
+    if (!newText || newText.trim() === msg.message) return
+    editMessage(msg.id, newText.trim(), bubble)
+  })
+
+  document.getElementById("ctxDelete").addEventListener("click", () => {
+    menu.remove()
+    if (confirm("Delete this message?")) {
+      deleteMessage(msg.id)
+    }
+  })
+
+  setTimeout(() => {
+    document.addEventListener("touchstart", () => menu.remove(), { once: true })
+    document.addEventListener("click", () => menu.remove(), { once: true })
+  }, 100)
+}
+
+/* ========================= */
+/* EDIT MESSAGE */
+/* ========================= */
+
+async function editMessage(msgId, newText, bubble) {
+  const { error } = await db
+    .from("chat_messages")
+    .update({ message: newText })
+    .eq("id", msgId)
+
+  if (error) {
+    alert("Edit failed")
     return
   }
 
-  const db = window.db
+  // Update text on screen
+  const msgTextEl = bubble.querySelector(".msgText")
+  if (msgTextEl) msgTextEl.textContent = newText
 
-  // 🔑 Tenor GIF API key — get your free key at: https://developers.google.com/tenor/guides/quickstart
-  const TENOR_API_KEY = "YOUR_TENOR_API_KEY_HERE"
-
-  /* ========================= */
-  /* USER                       */
-  /* ========================= */
-
-  let storedUser = null
-  try { storedUser = JSON.parse(localStorage.getItem("anon_user")) } catch (e) {}
-
-  if (!storedUser) {
-    const name = prompt("Enter your name") || "User_" + Math.floor(Math.random() * 1000)
-    storedUser = { name, id: crypto.randomUUID() }
-    localStorage.setItem("anon_user", JSON.stringify(storedUser))
+  // Show "edited" label
+  let editedLabel = bubble.querySelector(".editedLabel")
+  if (!editedLabel) {
+    editedLabel = document.createElement("span")
+    editedLabel.className = "editedLabel"
+    editedLabel.style = "font-size:10px;color:#64748b;margin-left:6px;"
+    editedLabel.textContent = "edited"
+    bubble.appendChild(editedLabel)
   }
 
-  const username = storedUser.name
-  const userId   = storedUser.id
+  // Update messageMap
+  if (messageMap[msgId]) messageMap[msgId].message = newText
+}
 
-  let longPressTimer = null
-  let replyTo        = null
+/* ========================= */
+/* DELETE MESSAGE */
+/* ========================= */
 
-  /* ========================= */
-  /* REPLY PREVIEW              */
-  /* ========================= */
+async function deleteMessage(msgId) {
+  const { error } = await db
+    .from("chat_messages")
+    .delete()
+    .eq("id", msgId)
 
-  function showReplyPreview(text) {
-    replyTo = text
-    replyPreview.style.display = "block"
-    replyPreview.innerHTML = `↩ <strong>${text}</strong> <span id="cancelReply" style="float:right;cursor:pointer;color:#ef4444;">✕</span>`
-    document.getElementById("cancelReply").onclick = clearReply
-    input.placeholder = "Replying..."
-    input.focus()
+  if (error) {
+    alert("Delete failed")
+    return
   }
 
-  function clearReply() {
-    replyTo = null
-    replyPreview.style.display = "none"
-    replyPreview.innerHTML = ""
-    input.placeholder = "Message..."
-  }
+  const el = document.querySelector(`[data-id="${msgId}"]`)
+  if (el) el.remove()
+  delete messageMap[msgId]
+}
 
-  /* ========================= */
-  /* DISPLAY MESSAGE            */
-  /* ========================= */
+/* ========================= */
+/* 🔔 ONESIGNAL */
+/* ========================= */
+window.OneSignalDeferred = window.OneSignalDeferred || [];
 
-  function displayMessage(msg) {
-    if (document.querySelector(`[data-id="${msg.id}"]`)) return
+OneSignalDeferred.push(async function(OneSignal) {
+  await OneSignal.init({ appId: "d433012f-f675-43f4-b382-f9e8b32407f0" });
+  await OneSignal.Notifications.requestPermission();
+  await OneSignal.login(userId);
+  await OneSignal.User.addTag("username", username);
+  console.log("✅ OneSignal initialized");
 
-    const div = document.createElement("div")
-    div.className = "mb-3"
-    div.setAttribute("data-id", msg.id)
-
-    let replyHTML = msg.reply_to
-      ? `<div style="font-size:11px;color:#94a3b8;border-left:2px solid #3b82f6;padding-left:6px;margin-bottom:4px;">↩ ${msg.reply_to}</div>`
-      : ""
-
-    let mediaHTML  = ""
-    let audioHTML  = ""
-
-    if (msg.media_url) {
-      const url = msg.media_url
-      const isAudio = url.includes(".webm") || url.includes(".ogg") || url.includes(".mp3")
-
-      if (isAudio) {
-        audioHTML = `
-          <audio controls style="margin-top:6px;max-width:220px;width:100%;">
-            <source src="${url}">
-          </audio>`
-      } else {
-        // image or GIF — both render as <img>
-        mediaHTML = `
-          <img src="${url}"
-            style="max-width:220px;border-radius:10px;margin-top:6px;display:block;cursor:pointer;"
-            loading="lazy"
-            onclick="window.open('${url}','_blank')"
-          >`
-      }
-    }
-
-    div.innerHTML = `
-      <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">${msg.username}</div>
-      ${replyHTML}
-      <div style="background:#1e293b;color:white;padding:10px 14px;border-radius:14px;display:inline-block;max-width:85%;text-align:left;">
-        ${msg.message ? `<span>${msg.message}</span>` : ""}
-        ${mediaHTML}
-        ${audioHTML}
-      </div>
-    `
-
-    /* SWIPE → reply | LONG PRESS → reactions */
-    let startX = 0
-
-    div.addEventListener("touchstart", (e) => {
-      startX = e.touches[0].clientX
-      longPressTimer = setTimeout(() => showReactions(msg.id), 500)
-    })
-
-    div.addEventListener("touchmove", (e) => {
-      const moveX = e.touches[0].clientX - startX
-      if (moveX > 80) {
-        clearTimeout(longPressTimer)
-        showReplyPreview(msg.message || "📎 Media")
-        div.style.transform = "translateX(20px)"
-      }
-    })
-
-    div.addEventListener("touchend", () => {
-      div.style.transform = "translateX(0)"
-      clearTimeout(longPressTimer)
-    })
-
-    // Desktop: right-click to react
-    div.addEventListener("contextmenu", (e) => {
-      e.preventDefault()
-      showReactions(msg.id)
-    })
-
-    messages.appendChild(div)
-    messages.scrollTop = messages.scrollHeight
-
-    loadReactions(msg.id, div)
-  }
-
-  /* ========================= */
-  /* LOAD HISTORY               */
-  /* ========================= */
-
-  async function loadHistory() {
-    const { data, error } = await db
-      .from("chat_messages")
-      .select("*")
-      .order("created_at", { ascending: true })
-      .limit(50)
-
-    if (error) { console.error("History error:", error); return }
-    data.forEach(displayMessage)
-  }
-
-  loadHistory()
-
-  /* ========================= */
-  /* SEND TEXT MESSAGE          */
-  /* ========================= */
-
-  async function sendMessage() {
-    const text = input.value.trim()
-    if (text === "") return
-
-    const tempId = "temp-" + Date.now()
-    displayMessage({ id: tempId, user_id: userId, username, message: text, reply_to: replyTo })
-
-    const { data, error } = await db.from("chat_messages").insert({
-      user_id: userId, username, message: text, reply_to: replyTo
-    }).select().single()
-
-    if (!error && data) {
-      const tempDiv = document.querySelector(`[data-id="${tempId}"]`)
-      if (tempDiv) tempDiv.setAttribute("data-id", data.id)
-    }
-
-    clearReply()
-    input.value = ""
-  }
-
-  /* ========================= */
-  /* IMAGE UPLOAD               */
-  /* ========================= */
-
-  fileInput.addEventListener("change", async () => {
-    const file = fileInput.files[0]
-    if (!file) return
-
-    // Validate — images only
-    if (!file.type.startsWith("image/")) {
-      alert("Only image files are supported.")
-      fileInput.value = ""
-      return
-    }
-
-    // Show uploading placeholder
-    const placeholderId = "upload-" + Date.now()
-    const placeholder = document.createElement("div")
-    placeholder.id = placeholderId
-    placeholder.className = "mb-3"
-    placeholder.innerHTML = `
-      <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">${username}</div>
-      <div style="background:#1e293b;color:#64748b;padding:10px 14px;border-radius:14px;display:inline-block;">
-        📤 Uploading image...
-      </div>
-    `
-    messages.appendChild(placeholder)
-    messages.scrollTop = messages.scrollHeight
-
-    const ext  = file.name.split(".").pop()
-    const path = `${userId}/${Date.now()}.${ext}`
-
-    const { error: uploadError } = await db.storage
-      .from("chat-media")
-      .upload(path, file, { contentType: file.type })
-
-    placeholder.remove()
-
-    if (uploadError) {
-      console.error("Upload failed:", uploadError)
-      alert("Image upload failed. Make sure the 'chat-media' bucket exists in Supabase Storage.")
-      fileInput.value = ""
-      return
-    }
-
-    const { data: urlData } = db.storage.from("chat-media").getPublicUrl(path)
-
-    const { data, error } = await db.from("chat_messages").insert({
-      user_id: userId,
-      username,
-      message: "",
-      media_url: urlData.publicUrl,
-      reply_to: replyTo
-    }).select().single()
-
-    if (!error && data) displayMessage(data)
-
-    clearReply()
-    fileInput.value = ""
-  })
-
-  /* ========================= */
-  /* GIF PICKER (Tenor API)     */
-  /* ========================= */
-
-  gifBtn.addEventListener("click", () => {
-    const existing = document.getElementById("gif-overlay")
-    if (existing) { existing.remove(); return }
-    openGifPicker()
-  })
-
-  function openGifPicker() {
-    const overlay = document.createElement("div")
-    overlay.id = "gif-overlay"
-    overlay.style = `
-      position:fixed;bottom:130px;left:0;right:0;
-      background:#0f172a;border-top:1px solid #1e293b;
-      z-index:999;padding:10px;
-      display:flex;flex-direction:column;gap:8px;
-      max-height:320px;
-    `
-
-    // Search bar row
-    const searchRow = document.createElement("div")
-    searchRow.style = "display:flex;gap:8px;align-items:center;"
-
-    const searchInput = document.createElement("input")
-    searchInput.placeholder = "🔍 Search GIFs..."
-    searchInput.style = `
-      flex:1;background:#1e293b;border:none;border-radius:20px;
-      padding:8px 14px;color:white;outline:none;font-size:14px;
-    `
-
-    const closeBtn = document.createElement("button")
-    closeBtn.innerText = "✕"
-    closeBtn.style = "background:none;border:none;color:#94a3b8;font-size:20px;cursor:pointer;padding:0 4px;"
-    closeBtn.onclick = () => overlay.remove()
-
-    searchRow.appendChild(searchInput)
-    searchRow.appendChild(closeBtn)
-
-    // GIF grid
-    const grid = document.createElement("div")
-    grid.style = `
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:5px;
-      overflow-y:auto;
-      max-height:250px;
-    `
-
-    overlay.appendChild(searchRow)
-    overlay.appendChild(grid)
-    document.body.appendChild(overlay)
-
-    // Load trending on open
-    fetchGifs("trending", grid)
-
-    let debounce = null
-    searchInput.addEventListener("input", () => {
-      clearTimeout(debounce)
-      debounce = setTimeout(() => {
-        const q = searchInput.value.trim()
-        fetchGifs(q || "trending", grid)
-      }, 450)
-    })
-
-    searchInput.focus()
-  }
-
-  async function fetchGifs(query, grid) {
-    grid.innerHTML = `<div style="color:#64748b;font-size:13px;padding:10px;grid-column:span 3;text-align:center;">Loading GIFs...</div>`
-
-    const isTrending = query === "trending"
-    const endpoint = isTrending
-      ? `https://tenor.googleapis.com/v2/featured?key=${TENOR_API_KEY}&limit=18&media_filter=gif`
-      : `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${TENOR_API_KEY}&limit=18&media_filter=gif`
-
+  setTimeout(async () => {
     try {
-      const res  = await fetch(endpoint)
-      const data = await res.json()
-
-      grid.innerHTML = ""
-
-      if (!data.results || data.results.length === 0) {
-        grid.innerHTML = `<div style="color:#64748b;font-size:13px;padding:10px;grid-column:span 3;text-align:center;">No GIFs found.</div>`
-        return
-      }
-
-      data.results.forEach(gif => {
-        const gifUrl     = gif.media_formats?.gif?.url
-        const previewUrl = gif.media_formats?.tinygif?.url || gifUrl
-        if (!gifUrl) return
-
-        const img = document.createElement("img")
-        img.src   = previewUrl
-        img.style = "width:100%;height:85px;object-fit:cover;border-radius:8px;cursor:pointer;transition:opacity 0.2s;"
-        img.onmouseenter = () => img.style.opacity = "0.8"
-        img.onmouseleave = () => img.style.opacity = "1"
-
-        img.onclick = async () => {
-          document.getElementById("gif-overlay")?.remove()
-          await sendGif(gifUrl)
-        }
-
-        grid.appendChild(img)
-      })
-
-    } catch (err) {
-      console.error("Tenor fetch error:", err)
-      grid.innerHTML = `<div style="color:#ef4444;font-size:13px;padding:10px;grid-column:span 3;text-align:center;">Failed to load GIFs. Check your Tenor API key.</div>`
+      const permission = await OneSignal.Notifications.permission;
+      const subId = await OneSignal.User.PushSubscription.id;
+      alert("Permission: " + permission + "\nSubscription ID: " + subId);
+    } catch (e) {
+      alert("Error: " + e.message);
     }
+  }, 6000);
+});
+
+/* ========================= */
+/* IMAGE UPLOAD */
+/* ========================= */
+
+fileInput.addEventListener("change", async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+
+  const fileName = `chat/${Date.now()}-${file.name}`
+  const { error: uploadError } = await db.storage.from("chat-images").upload(fileName, file)
+
+  if (uploadError) {
+    console.error(uploadError)
+    alert("Image upload failed")
+    return
   }
 
-  async function sendGif(gifUrl) {
-    const tempId = "temp-" + Date.now()
-    displayMessage({ id: tempId, user_id: userId, username, message: "", media_url: gifUrl, reply_to: replyTo })
+  const { data } = db.storage.from("chat-images").getPublicUrl(fileName)
+  const publicUrl = data.publicUrl
 
-    const { data, error } = await db.from("chat_messages").insert({
-      user_id: userId,
-      username,
-      message: "",
-      media_url: gifUrl,
-      reply_to: replyTo
-    }).select().single()
+  const insertData = { user_id: userId, username, media_url: publicUrl }
+  if (replyTo) insertData.reply_to = replyTo.id
 
-    if (!error && data) {
-      const tempDiv = document.querySelector(`[data-id="${tempId}"]`)
-      if (tempDiv) tempDiv.setAttribute("data-id", data.id)
-    }
+  displayMessage({ id: Date.now(), username, media_url: publicUrl, reply_to: replyTo?.id, _replyData: replyTo })
+  await db.from("chat_messages").insert(insertData)
+  clearReply()
+  fileInput.value = ""
+})
 
-    clearReply()
+/* ========================= */
+/* INPUT UI */
+/* ========================= */
+
+function updateInputUI(){
+  try {
+    const hasText = input.value.trim().length > 0
+    sendBtn.style.display = hasText ? "inline-block" : "none"
+    if(voiceBtn) voiceBtn.style.display = hasText ? "none" : "inline-block"
+  } catch(e){
+    console.error("UI error:", e)
   }
+}
 
-  /* ========================= */
-  /* VOICE RECORDING            */
-  /* ========================= */
+input.addEventListener("input", updateInputUI)
+updateInputUI()
 
-  let mediaRecorder = null
-  let audioChunks   = []
+/* ========================= */
+/* DISPLAY MESSAGE */
+/* ========================= */
 
-  voiceBtn.addEventListener("click", async () => {
-    if (mediaRecorder && mediaRecorder.state === "recording") {
-      mediaRecorder.stop()
-      voiceBtn.textContent = "🎤"
-      voiceBtn.classList.remove("recording")
-      return
-    }
+const messageMap = {}
 
-    try {
-      const stream  = await navigator.mediaDevices.getUserMedia({ audio: true })
-      mediaRecorder = new MediaRecorder(stream)
-      audioChunks   = []
+function displayMessage(msg){
+  messageMap[msg.id] = msg
 
-      mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data)
+  const div = document.createElement("div")
+  div.className = "mb-3"
+  div.dataset.id = msg.id
 
-      mediaRecorder.onstop = async () => {
-        const blob = new Blob(audioChunks, { type: "audio/webm" })
-        const path = `${userId}/voice-${Date.now()}.webm`
+  const isOwn = msg.user_id === userId
 
-        const { error } = await db.storage.from("chat-media").upload(path, blob)
-        if (error) { console.error("Voice upload failed:", error); return }
-
-        const { data: urlData } = db.storage.from("chat-media").getPublicUrl(path)
-
-        await db.from("chat_messages").insert({
-          user_id: userId,
-          username,
-          message: "🎤 Voice message",
-          media_url: urlData.publicUrl,
-          reply_to: replyTo
-        })
-
-        clearReply()
-        stream.getTracks().forEach(t => t.stop())
-      }
-
-      mediaRecorder.start()
-      voiceBtn.textContent = "⏹"
-      voiceBtn.classList.add("recording")
-
-    } catch (err) {
-      console.error("Mic access denied:", err)
-      alert("Microphone permission denied.")
-    }
-  })
-
-  /* ========================= */
-  /* REALTIME CHAT              */
-  /* ========================= */
-
-  db.channel("live-chat")
-    .on("postgres_changes",
-      { event: "INSERT", schema: "public", table: "chat_messages" },
-      (payload) => {
-        if (payload.new.user_id !== userId) displayMessage(payload.new)
-      })
-    .subscribe()
-
-  /* ========================= */
-  /* REALTIME REACTIONS         */
-  /* ========================= */
-
-  db.channel("reactions-live")
-    .on("postgres_changes",
-      { event: "*", schema: "public", table: "reactions" },
-      (payload) => {
-        const reaction = payload.new || payload.old
-        if (reaction) updateReactionUI(reaction)
-      })
-    .subscribe()
-
-  function updateReactionUI(reaction) {
-    const msgDiv = document.querySelector(`[data-id="${reaction.message_id}"]`)
-    if (!msgDiv) return
-    loadReactions(reaction.message_id, msgDiv)
-  }
-
-  /* ========================= */
-  /* REACTIONS                  */
-  /* ========================= */
-
-  function showReactions(messageId) {
-    const old = document.getElementById("reaction-overlay")
-    if (old) old.remove()
-
-    const emojis = ["❤️", "😂", "🔥", "👍", "💯", "😮", "😢"]
-
-    const overlay = document.createElement("div")
-    overlay.id = "reaction-overlay"
-    overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;z-index:998;"
-    overlay.onclick = () => overlay.remove()
-
-    const picker = document.createElement("div")
-    picker.style = "position:fixed;bottom:140px;left:50%;transform:translateX(-50%);background:#1e293b;padding:10px 16px;border-radius:24px;display:flex;gap:10px;box-shadow:0 8px 30px rgba(0,0,0,0.6);"
-
-    emojis.forEach(emoji => {
-      const btn = document.createElement("span")
-      btn.innerText = emoji
-      btn.style.cssText = "font-size:26px;cursor:pointer;transition:transform 0.15s;"
-      btn.onmouseenter = () => btn.style.transform = "scale(1.35)"
-      btn.onmouseleave = () => btn.style.transform = "scale(1)"
-
-      btn.onclick = async (e) => {
-        e.stopPropagation()
-
-        // Delete existing reaction (one per user per message)
-        await db.from("reactions")
-          .delete()
-          .eq("message_id", messageId)
-          .eq("user_id", userId)
-
-        await db.from("reactions").insert({
-          message_id: messageId,
-          user_id: userId,
-          emoji
-        })
-
-        updateReactionUI({ message_id: messageId })
-        overlay.remove()
-      }
-
-      picker.appendChild(btn)
-    })
-
-    overlay.appendChild(picker)
-    document.body.appendChild(overlay)
-  }
-
-  /* ========================= */
-  /* LOAD REACTIONS             */
-  /* ========================= */
-
-  async function loadReactions(messageId, container) {
-    const { data, error } = await db
-      .from("reactions")
-      .select("emoji, user_id")
-      .eq("message_id", messageId)
-
-    if (error || !data) return
-
-    const old = container.querySelector(".reaction-box")
-    if (old) old.remove()
-
-    const counts = {}
-    let myReactionEmoji = null
-
-    data.forEach(r => {
-      counts[r.emoji] = (counts[r.emoji] || 0) + 1
-      if (r.user_id === userId) myReactionEmoji = r.emoji
-    })
-
-    if (Object.keys(counts).length === 0) return
-
-    const reactionDiv = document.createElement("div")
-    reactionDiv.className = "reaction-box"
-    reactionDiv.style = "display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;"
-
-    Object.entries(counts).forEach(([emoji, count]) => {
-      const isMine = emoji === myReactionEmoji
-      const span = document.createElement("span")
-      span.style = `
-        background:${isMine ? "#3b82f6" : "#1e293b"};
-        border:1px solid ${isMine ? "#60a5fa" : "#334155"};
-        padding:2px 8px;border-radius:20px;font-size:13px;cursor:pointer;
+  let replyHTML = ""
+  if (msg.reply_to) {
+    const original = msg._replyData || messageMap[msg.reply_to]
+    if (original) {
+      replyHTML = `
+        <div style="
+          background:#0f172a;
+          border-left:3px solid #3b82f6;
+          border-radius:6px;
+          padding:5px 8px;
+          margin-bottom:5px;
+          font-size:11px;
+          color:#9ca3af;
+          max-width:100%;
+          overflow:hidden;
+        ">
+          <span style="color:#3b82f6;font-weight:bold;">${original.username}</span><br>
+          <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">
+            ${original.message || "📷 Media"}
+          </span>
+        </div>
       `
-      span.innerText = `${emoji} ${count}`
-
-      span.onclick = async () => {
-        if (isMine) {
-          await db.from("reactions")
-            .delete()
-            .eq("message_id", messageId)
-            .eq("user_id", userId)
-          updateReactionUI({ message_id: messageId })
-        } else {
-          showReactions(messageId)
-        }
-      }
-
-      reactionDiv.appendChild(span)
-    })
-
-    container.appendChild(reactionDiv)
+    }
   }
 
-  /* ========================= */
-  /* EVENTS                     */
-  /* ========================= */
+  let mediaHTML = msg.media_url
+    ? `<img src="${msg.media_url}" style="max-width:200px;border-radius:10px;margin-top:5px;">`
+    : ""
 
-  input.addEventListener("keydown", e => {
-    if (e.key === "Enter") sendMessage()
+  // Show "edited" label if message was edited
+  const editedHTML = msg.is_edited
+    ? `<span class="editedLabel" style="font-size:10px;color:#64748b;margin-left:6px;">edited</span>`
+    : ""
+
+  div.innerHTML = `
+    <div style="font-size:11px;color:#9ca3af;margin-bottom:2px;">${msg.username}</div>
+    <div class="msgBubble" style="
+      background:#1e293b;
+      color:white;
+      padding:10px 14px;
+      border-radius:14px;
+      display:inline-block;
+      max-width:80%;
+      position:relative;
+      transition: transform 0.2s ease;
+      user-select: none;
+    ">
+      ${replyHTML}
+      <span class="msgText">${msg.message || ""}</span>
+      ${editedHTML}
+      ${mediaHTML}
+    </div>
+  `
+
+  const bubble = div.querySelector(".msgBubble")
+
+  /* ---- HOLD TO SHOW MENU ---- */
+  if (isOwn) {
+    let holdTimer = null
+
+    bubble.addEventListener("touchstart", () => {
+      holdTimer = setTimeout(() => {
+        if (navigator.vibrate) navigator.vibrate(40)
+        showContextMenu(msg, bubble)
+      }, 500)
+    }, { passive: true })
+
+    bubble.addEventListener("touchend", () => clearTimeout(holdTimer))
+    bubble.addEventListener("touchmove", () => clearTimeout(holdTimer))
+  }
+
+  /* ---- SWIPE TO REPLY ---- */
+  let startX = 0
+  let currentX = 0
+  let isSwiping = false
+  const SWIPE_THRESHOLD = 60
+
+  bubble.addEventListener("touchstart", (e) => {
+    startX = e.touches[0].clientX
+    isSwiping = true
+  }, { passive: true })
+
+  bubble.addEventListener("touchmove", (e) => {
+    if (!isSwiping) return
+    currentX = e.touches[0].clientX
+    const diff = currentX - startX
+    if (diff > 0 && diff < 100) {
+      bubble.style.transform = `translateX(${diff}px)`
+      bubble.style.borderLeft = diff > SWIPE_THRESHOLD ? "3px solid #3b82f6" : ""
+    }
+  }, { passive: true })
+
+  bubble.addEventListener("touchend", () => {
+    const diff = currentX - startX
+    isSwiping = false
+    bubble.style.transform = "translateX(0)"
+    bubble.style.borderLeft = ""
+    if (diff > SWIPE_THRESHOLD) {
+      setReply(msg)
+      if (navigator.vibrate) navigator.vibrate(40)
+    }
+    currentX = 0
+    startX = 0
   })
 
-  sendBtn.addEventListener("click", sendMessage)
+  messages.appendChild(div)
+  messages.scrollTop = messages.scrollHeight
+}
+
+/* ========================= */
+/* SEND MESSAGE */
+/* ========================= */
+
+async function sendMessage(){
+  const text = input.value.trim()
+  if(text === "") return
+
+  const msgData = { user_id: userId, username, message: text }
+  if (replyTo) msgData.reply_to = replyTo.id
+
+  displayMessage({
+    id: Date.now(),
+    username,
+    message: text,
+    reply_to: replyTo?.id,
+    _replyData: replyTo ? { ...replyTo } : null
+  })
+
+  const { error } = await db.from("chat_messages").insert(msgData)
+
+  if(error){
+    console.error(error)
+    alert("❌ Not saved in DB")
+    return
+  }
+
+  input.value = ""
+  clearReply()
+  updateInputUI()
+}
+
+/* ========================= */
+/* LOAD MESSAGES */
+/* ========================= */
+
+async function loadMessages(){
+  const { data } = await db
+    .from("chat_messages")
+    .select("*")
+    .order("created_at", { ascending: true })
+
+  messages.innerHTML = ""
+  data.forEach(msg => { messageMap[msg.id] = msg })
+  data.forEach(msg => {
+    if (msg.reply_to) msg._replyData = messageMap[msg.reply_to] || null
+    displayMessage(msg)
+  })
+}
+
+loadMessages()
+
+/* ========================= */
+/* REALTIME */
+/* ========================= */
+
+db.channel("live-chat")
+.on("postgres_changes",
+  { event: "INSERT", schema: "public", table: "chat_messages" },
+  (payload) => {
+    if(payload.new.user_id !== userId){
+      const msg = payload.new
+      if (msg.reply_to) msg._replyData = messageMap[msg.reply_to] || null
+      displayMessage(msg)
+    }
+  })
+.on("postgres_changes",
+  { event: "UPDATE", schema: "public", table: "chat_messages" },
+  (payload) => {
+    const msg = payload.new
+    const el = document.querySelector(`[data-id="${msg.id}"]`)
+    if (!el) return
+    const bubble = el.querySelector(".msgBubble")
+    const msgTextEl = bubble?.querySelector(".msgText")
+    if (msgTextEl) msgTextEl.textContent = msg.message || ""
+    // Add edited label if not already there
+    if (!bubble?.querySelector(".editedLabel")) {
+      const editedLabel = document.createElement("span")
+      editedLabel.className = "editedLabel"
+      editedLabel.style = "font-size:10px;color:#64748b;margin-left:6px;"
+      editedLabel.textContent = "edited"
+      bubble?.appendChild(editedLabel)
+    }
+    if (messageMap[msg.id]) messageMap[msg.id].message = msg.message
+  })
+.on("postgres_changes",
+  { event: "DELETE", schema: "public", table: "chat_messages" },
+  (payload) => {
+    const el = document.querySelector(`[data-id="${payload.old.id}"]`)
+    if (el) el.remove()
+    delete messageMap[payload.old.id]
+  })
+.subscribe()
+
+/* ========================= */
+/* GIF */
+/* ========================= */
+
+const GIPHY_API_KEY = "4O3KmphtX0AmuqeXjq61mvOdzYJWe8gN"
+gifBtn.onclick = openGifPicker
+
+async function openGifPicker(){
+  const overlay = document.createElement("div")
+  overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:999"
+
+  const box = document.createElement("div")
+  box.style = "position:absolute;bottom:0;width:100%;height:50%;background:#0f172a;overflow-y:scroll;padding:10px"
+
+  overlay.appendChild(box)
+  document.body.appendChild(overlay)
+
+  const res = await fetch(`https://api.giphy.com/v1/gifs/trending?api_key=${GIPHY_API_KEY}&limit=20`)
+  const data = await res.json()
+
+  data.data.forEach(gif => {
+    const img = document.createElement("img")
+    img.src = gif.images.fixed_height.url
+    img.style = "width:100px;margin:5px;border-radius:10px"
+
+    img.onclick = async () => {
+      const insertData = { user_id: userId, username, media_url: gif.images.fixed_height.url }
+      if (replyTo) insertData.reply_to = replyTo.id
+
+      displayMessage({
+        id: Date.now(),
+        username,
+        media_url: gif.images.fixed_height.url,
+        reply_to: replyTo?.id,
+        _replyData: replyTo ? { ...replyTo } : null
+      })
+
+      await db.from("chat_messages").insert(insertData)
+      clearReply()
+      overlay.remove()
+    }
+
+    box.appendChild(img)
+  })
+
+  overlay.onclick = () => overlay.remove()
+}
+
+/* ========================= */
+/* EVENTS */
+/* ========================= */
+
+input.addEventListener("keydown", e => {
+  if(e.key === "Enter") sendMessage()
+})
+
+sendBtn.addEventListener("click", sendMessage)
 
 })
