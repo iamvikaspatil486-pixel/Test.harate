@@ -15,9 +15,102 @@ content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable
 
 <script src="supabase.js"></script>
 
+<style>
+  /* Notification Popup Animation */
+  @keyframes slideUp {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+  @keyframes slideDown {
+    from { transform: translateY(0);    opacity: 1; }
+    to   { transform: translateY(100%); opacity: 0; }
+  }
+  #notifPopup {
+    animation: slideUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+  #notifPopup.hiding {
+    animation: slideDown 0.25s ease-in forwards;
+  }
+
+  /* Bell ring animation */
+  @keyframes bellRing {
+    0%,100% { transform: rotate(0deg); }
+    15%      { transform: rotate(20deg); }
+    30%      { transform: rotate(-18deg); }
+    45%      { transform: rotate(14deg); }
+    60%      { transform: rotate(-10deg); }
+    75%      { transform: rotate(6deg); }
+  }
+  .bell-ring {
+    display: inline-block;
+    animation: bellRing 1.2s ease infinite;
+    transform-origin: top center;
+  }
+</style>
+
 </head>
 
 <body class="bg-slate-950 text-white font-sans overflow-x-hidden">
+
+<!-- ═══════════════════════════════════════
+     NOTIFICATION PERMISSION POPUP
+     Shown once per session unless already granted/denied
+     ═══════════════════════════════════════ -->
+<div id="notifPopup"
+  class="fixed bottom-20 left-3 right-3 z-[100] max-w-md mx-auto hidden">
+
+  <div class="bg-slate-800 border border-slate-600 rounded-2xl p-4 shadow-2xl shadow-black/60">
+
+    <!-- Top row: icon + title + close -->
+    <div class="flex items-start gap-3">
+
+      <!-- Bell icon with ring animation -->
+      <div class="w-11 h-11 rounded-xl bg-cyan-500/20 border border-cyan-500/30
+                  flex items-center justify-center flex-shrink-0">
+        <span class="bell-ring text-cyan-400 text-xl">🔔</span>
+      </div>
+
+      <!-- Text -->
+      <div class="flex-1">
+        <p class="text-sm font-bold text-white leading-tight">
+          Stay in the loop!
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
+          Get notified when classmates post, like or comment — never miss a moment.
+        </p>
+      </div>
+
+      <!-- Close (X) -->
+      <button id="notifDismiss"
+        class="text-slate-500 hover:text-slate-300 transition-colors mt-0.5 text-lg leading-none">
+        ✕
+      </button>
+
+    </div>
+
+    <!-- Action buttons -->
+    <div class="flex gap-2 mt-3">
+
+      <button id="notifAllow"
+        class="flex-1 bg-cyan-500 hover:bg-cyan-400 active:bg-cyan-600
+               text-slate-900 font-bold text-sm rounded-xl py-2.5
+               transition-colors flex items-center justify-center gap-1.5">
+        <span>Allow Notifications</span>
+      </button>
+
+      <button id="notifDecline"
+        class="px-4 bg-slate-700 hover:bg-slate-600 active:bg-slate-800
+               text-slate-300 font-semibold text-sm rounded-xl py-2.5
+               transition-colors">
+        Not now
+      </button>
+
+    </div>
+
+  </div>
+</div>
+<!-- ═══ END NOTIFICATION POPUP ═══ -->
+
 
 <!-- HEADER -->
 <header class="sticky top-0 bg-slate-900 border-b border-slate-800 p-4 flex items-center z-50">
@@ -164,6 +257,10 @@ class="bg-cyan-500 p-3 rounded-full text-slate-900">
 <script>
 lucide.createIcons()
 </script>
+
+<!-- ═══════════════════════════════════════
+     STUDENTS MODAL LOGIC
+     ═══════════════════════════════════════ -->
 <script>
   let allStudents = [];
 
@@ -201,7 +298,7 @@ lucide.createIcons()
     renderStudents(allStudents);
   }
   
-function renderStudents(students) {
+  function renderStudents(students) {
     const list = document.getElementById('studentList');
 
     if (students.length === 0) {
@@ -228,7 +325,8 @@ function renderStudents(students) {
   function filterStudents() {
     const q = document.getElementById('studentSearch').value.toLowerCase();
     const filtered = allStudents.filter(s =>
-      (s.username || '').toLowerCase().includes(q)
+      (s.full_name || '').toLowerCase().includes(q) ||
+      (s.roll_no || '').toLowerCase().includes(q)
     );
     renderStudents(filtered);
   }
@@ -237,6 +335,121 @@ function renderStudents(students) {
   document.getElementById('studentsModal').addEventListener('click', function(e) {
     if (e.target === this) closeStudents();
   });
+</script>
+
+<!-- ═══════════════════════════════════════
+     NOTIFICATION PERMISSION LOGIC
+     ═══════════════════════════════════════ -->
+<script>
+  (function initNotificationPrompt() {
+    const popup    = document.getElementById('notifPopup');
+    const btnAllow   = document.getElementById('notifAllow');
+    const btnDecline = document.getElementById('notifDecline');
+    const btnDismiss = document.getElementById('notifDismiss');
+
+    // ── helpers ──────────────────────────────────────────────
+    function hidePopup() {
+      popup.classList.add('hiding');
+      popup.addEventListener('animationend', () => {
+        popup.classList.add('hidden');
+        popup.classList.remove('hiding');
+      }, { once: true });
+    }
+
+    function showPopup() {
+      popup.classList.remove('hidden');
+    }
+
+    // ── show toast feedback ──────────────────────────────────
+    function showToast(msg, color = 'bg-slate-700') {
+      const t = document.createElement('div');
+      t.textContent = msg;
+      t.className = `fixed bottom-24 left-1/2 -translate-x-1/2 ${color}
+                     text-white text-xs font-semibold px-4 py-2 rounded-full
+                     shadow-lg z-[200] opacity-0 transition-opacity duration-300`;
+      document.body.appendChild(t);
+      requestAnimationFrame(() => { t.style.opacity = '1'; });
+      setTimeout(() => {
+        t.style.opacity = '0';
+        t.addEventListener('transitionend', () => t.remove());
+      }, 2800);
+    }
+
+    // ── check if we should show at all ──────────────────────
+    // Don't show if browser doesn't support notifications
+    if (!('Notification' in window)) return;
+
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const savedChoice    = localStorage.getItem('notifChoice');
+    const declinedAt     = localStorage.getItem('notifDeclinedAt');
+
+    // Permanently granted — never show again
+    if (savedChoice === 'granted') return;
+
+    // Browser-level granted — save and skip
+    if (Notification.permission === 'granted') {
+      localStorage.setItem('notifChoice', 'granted');
+      return;
+    }
+
+    // "Not now" declined by user — re-ask only after 1 day
+    if (savedChoice === 'declined') {
+      if (!declinedAt) return;                             // safety guard
+      const elapsed = Date.now() - parseInt(declinedAt, 10);
+      if (elapsed < ONE_DAY_MS) return;                   // still within 1 day, skip
+      // 1 day has passed → clear old choice so we ask again
+      localStorage.removeItem('notifChoice');
+      localStorage.removeItem('notifDeclinedAt');
+    }
+
+    // Browser hard-denied (user clicked "Block" in the browser prompt) — don't nag
+    if (Notification.permission === 'denied') return;
+
+    // ── show popup after a short delay ───────────────────────
+    setTimeout(showPopup, 1800);
+
+    // ── ALLOW button ─────────────────────────────────────────
+    btnAllow.addEventListener('click', async () => {
+      hidePopup();
+      try {
+        const permission = await Notification.requestPermission();
+
+        if (permission === 'granted') {
+          localStorage.setItem('notifChoice', 'granted');
+          showToast('🔔 Notifications enabled!', 'bg-cyan-600');
+
+          // Show a welcome notification
+          new Notification('Students Harate 🎓', {
+            body: "You're all set! We'll notify you of new posts & activity.",
+            icon: '/icon.png'   // replace with your actual icon path if you have one
+          });
+
+        } else if (permission === 'denied') {
+          localStorage.setItem('notifChoice', 'denied');
+          showToast('Notifications blocked.', 'bg-slate-700');
+
+        } else {
+          // 'default' — user closed the browser prompt without choosing
+          showToast('No choice made. You can enable later.', 'bg-slate-700');
+        }
+      } catch (err) {
+        console.error('Notification permission error:', err);
+        showToast('Could not request permission.', 'bg-red-700');
+      }
+    });
+
+    // ── DECLINE / DISMISS buttons ─────────────────────────────
+    function handleDecline() {
+      localStorage.setItem('notifChoice', 'declined');
+      localStorage.setItem('notifDeclinedAt', Date.now().toString());
+      hidePopup();
+      showToast("We'll ask again tomorrow 🙂", 'bg-slate-700');
+    }
+
+    btnDecline.addEventListener('click', handleDecline);
+    btnDismiss.addEventListener('click', handleDecline);
+
+  })();
 </script>
 
 </body>
