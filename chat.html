@@ -24,6 +24,7 @@ html, body {
   overflow: hidden;
 }
 
+/* ── Header ── */
 .header {
   display: flex;
   align-items: center;
@@ -34,15 +35,17 @@ html, body {
   flex-shrink: 0;
 }
 
+/* ── Messages ── */
 .messages {
   flex: 1;
   overflow-y: auto;
   padding: 15px;
-  padding-bottom: 90px;
+  padding-bottom: 110px;
   color: white;
   scroll-behavior: smooth;
 }
 
+/* ── Bottom chat ── */
 .bottom-chat {
   position: fixed;
   bottom: 0;
@@ -78,10 +81,26 @@ html, body {
   padding: 10px 14px;
   color: white;
   outline: none;
+  font-size: 15px;
 }
 
-.icon { font-size: 22px; color: white; cursor: pointer; }
-.send-btn { font-size: 22px; color: #3b82f6; cursor: pointer; }
+.icon {
+  font-size: 22px;
+  color: white;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+.send-btn {
+  font-size: 22px;
+  color: #3b82f6;
+  cursor: pointer;
+  background: none;
+  border: none;
+  flex-shrink: 0;
+}
+
 #gifBtn { flex-shrink: 0; }
 
 /* ── Message bubble ── */
@@ -112,7 +131,6 @@ html, body {
   border-bottom-left-radius: 4px;
 }
 
-/* edited label */
 .edited-tag {
   font-size: 10px;
   opacity: 0.6;
@@ -147,14 +165,17 @@ html, body {
   font-size: 15px;
   cursor: pointer;
   transition: background 0.12s;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
 }
 
 .ctx-item:hover { background: #334155; }
 .ctx-item:not(:last-child) { border-bottom: 1px solid #334155; }
-
 .ctx-item.danger { color: #f87171; }
 
-/* ── Edit bar (replaces bottom input area while editing) ── */
+/* ── Edit bar ── */
 #editBar {
   display: none;
   align-items: center;
@@ -195,6 +216,8 @@ html, body {
   font-size: 20px;
   cursor: pointer;
   padding: 4px;
+  background: none;
+  border: none;
 }
 
 #saveEditBtn {
@@ -202,9 +225,11 @@ html, body {
   font-size: 22px;
   cursor: pointer;
   padding: 4px;
+  background: none;
+  border: none;
 }
 
-/* Dim overlay when context menu is open */
+/* ── Dim overlay ── */
 #ctxOverlay {
   display: none;
   position: fixed;
@@ -228,23 +253,28 @@ html, body {
 <!-- MESSAGES -->
 <div class="messages" id="messagesContainer"></div>
 
-<!-- BOTTOM CHAT (normal) -->
+<!-- BOTTOM CHAT -->
 <div class="bottom-chat" id="normalBar">
-  <div class="action-row">
+
+  <!-- ICON ROW — hides when typing -->
+  <div class="action-row" id="actionRow">
     <label class="icon">
       🖼
       <input type="file" hidden accept="image/*">
     </label>
     <button id="voiceBtn" class="icon">🎤</button>
     <button id="gifBtn" class="icon">GIF</button>
-    <button id="sendBtn" class="send-btn" style="display:none">➤</button>
   </div>
+
+  <!-- MESSAGE INPUT + SEND BUTTON -->
   <div class="msg-row">
     <input id="msgInput" type="text" placeholder="Message..." class="msg-input" />
+    <button id="sendBtn" class="send-btn" style="display:none">➤</button>
   </div>
+
 </div>
 
-<!-- EDIT BAR (shown while editing a message) -->
+<!-- EDIT BAR -->
 <div id="editBar">
   <button id="cancelEditBtn">✕</button>
   <span class="edit-label">✏️ Edit</span>
@@ -257,20 +287,50 @@ html, body {
 
 <!-- CONTEXT MENU -->
 <div id="ctxMenu">
-  <div class="ctx-item" id="ctxEdit">✏️ &nbsp;Edit</div>
-  <div class="ctx-item danger" id="ctxDelete">🗑️ &nbsp;Delete</div>
+  <button class="ctx-item" id="ctxEdit">✏️ &nbsp;Edit</button>
+  <button class="ctx-item danger" id="ctxDelete">🗑️ &nbsp;Delete</button>
 </div>
 
 <script>
-/* ═══════════════════════════════════════════════
-   HOLD-TO-SHOW context menu for own messages
-   Works with touch (long press) and mouse (right-click / long press)
-═══════════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   SEND BUTTON — show when typing, hide when empty
+   Icons hide when typing to keep it clean
+══════════════════════════════════════════ */
+const msgInput  = document.getElementById('msgInput');
+const sendBtn   = document.getElementById('sendBtn');
+const actionRow = document.getElementById('actionRow');
 
-let holdTimer = null;
-let activeMsgEl = null;   // the bubble element
-let activeMsgId = null;   // Supabase message id
-let editingMsgId = null;  // currently being edited
+msgInput.addEventListener('input', () => {
+  const hasText = msgInput.value.trim().length > 0;
+  sendBtn.style.display   = hasText ? 'block' : 'none';
+  actionRow.style.display = hasText ? 'none'  : 'flex';
+});
+
+// Send on button click
+sendBtn.addEventListener('click', sendMessage);
+
+// Send on Enter key
+msgInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text) return;
+  // Dispatch event so chat.js can pick it up
+  msgInput.dispatchEvent(new CustomEvent('sendMessage', { detail: text, bubbles: true }));
+  msgInput.value = '';
+  sendBtn.style.display   = 'none';
+  actionRow.style.display = 'flex';
+}
+
+/* ══════════════════════════════════════════
+   HOLD-TO-SHOW context menu (own messages only)
+══════════════════════════════════════════ */
+let holdTimer    = null;
+let activeMsgEl  = null;
+let activeMsgId  = null;
+let editingMsgId = null;
 
 const HOLD_DURATION = 500; // ms
 
@@ -282,12 +342,9 @@ const normalBar  = document.getElementById('normalBar');
 const editBar    = document.getElementById('editBar');
 const editInput  = document.getElementById('editInput');
 
-/* ── Show context menu at position ── */
 function showCtxMenu(x, y) {
-  ctxMenu.style.display = 'block';
+  ctxMenu.style.display   = 'block';
   ctxOverlay.style.display = 'block';
-
-  // Keep menu within viewport
   const mw = 170, mh = 110;
   const vw = window.innerWidth, vh = window.innerHeight;
   ctxMenu.style.left = Math.min(x, vw - mw - 8) + 'px';
@@ -295,32 +352,32 @@ function showCtxMenu(x, y) {
 }
 
 function hideCtxMenu() {
-  ctxMenu.style.display = 'none';
+  ctxMenu.style.display   = 'none';
   ctxOverlay.style.display = 'none';
   activeMsgEl = null;
   activeMsgId = null;
 }
 
-/* ── Attach hold listeners to a bubble ── */
+/* Attach to a bubble — only works if isOwn = true */
 function attachHoldListeners(bubble, msgId, isOwn) {
-  if (!isOwn) return; // only for sender's messages
+  if (!isOwn) return;
 
-  // Touch: long press
+  // Touch long press
   bubble.addEventListener('touchstart', (e) => {
     holdTimer = setTimeout(() => {
       const touch = e.touches[0];
       activeMsgEl = bubble;
       activeMsgId = msgId;
       showCtxMenu(touch.clientX, touch.clientY - 120);
-      navigator.vibrate?.(30); // subtle haptic
+      navigator.vibrate?.(30);
     }, HOLD_DURATION);
   }, { passive: true });
 
-  bubble.addEventListener('touchend',   () => clearTimeout(holdTimer));
-  bubble.addEventListener('touchmove',  () => clearTimeout(holdTimer));
-  bubble.addEventListener('touchcancel',() => clearTimeout(holdTimer));
+  bubble.addEventListener('touchend',    () => clearTimeout(holdTimer));
+  bubble.addEventListener('touchmove',   () => clearTimeout(holdTimer));
+  bubble.addEventListener('touchcancel', () => clearTimeout(holdTimer));
 
-  // Mouse: right-click or long press
+  // Right-click (desktop)
   bubble.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     activeMsgEl = bubble;
@@ -328,6 +385,7 @@ function attachHoldListeners(bubble, msgId, isOwn) {
     showCtxMenu(e.clientX, e.clientY - 80);
   });
 
+  // Mouse long press (desktop)
   let mouseHold;
   bubble.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return;
@@ -337,43 +395,39 @@ function attachHoldListeners(bubble, msgId, isOwn) {
       showCtxMenu(e.clientX, e.clientY - 80);
     }, HOLD_DURATION);
   });
-  bubble.addEventListener('mouseup',   () => clearTimeout(mouseHold));
-  bubble.addEventListener('mouseleave',() => clearTimeout(mouseHold));
+  bubble.addEventListener('mouseup',    () => clearTimeout(mouseHold));
+  bubble.addEventListener('mouseleave', () => clearTimeout(mouseHold));
 }
 
-/* ── Dismiss menu when overlay tapped ── */
-ctxOverlay.addEventListener('click', hideCtxMenu);
+// Close menu when tapping outside
+ctxOverlay.addEventListener('click',    hideCtxMenu);
 ctxOverlay.addEventListener('touchend', hideCtxMenu);
 
 /* ── EDIT action ── */
 ctxEdit.addEventListener('click', () => {
   if (!activeMsgEl || !activeMsgId) return;
 
-  // Get current text (excluding the "edited" tag if present)
-  const textNode = activeMsgEl.querySelector('.msg-text');
-  const currentText = textNode ? textNode.textContent : activeMsgEl.textContent.replace('✏️ edited','').trim();
+  const textNode    = activeMsgEl.querySelector('.msg-text');
+  const currentText = textNode ? textNode.textContent : '';
 
-  editingMsgId = activeMsgId;
+  editingMsgId    = activeMsgId;
   editInput.value = currentText;
 
-  // Show edit bar, hide normal bar
   normalBar.style.display = 'none';
-  editBar.style.display = 'flex';
+  editBar.style.display   = 'flex';
   editInput.focus();
 
   hideCtxMenu();
 });
 
-/* ── Cancel edit ── */
 document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
 
 function cancelEdit() {
   editingMsgId = null;
-  editBar.style.display = 'none';
+  editBar.style.display   = 'none';
   normalBar.style.display = 'flex';
 }
 
-/* ── Save edit ── */
 document.getElementById('saveEditBtn').addEventListener('click', saveEdit);
 editInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(); });
 
@@ -382,24 +436,22 @@ async function saveEdit() {
   if (!newText || !editingMsgId) return;
 
   try {
-    // Update in Supabase — adjust table/column names to match your schema
     const { error } = await db
-      .from('messages')
-      .update({ content: newText, edited: true })
+      .from('chat_messages')
+      .update({ message: newText, edited: true })
       .eq('id', editingMsgId);
 
     if (error) throw error;
 
-    // Optimistic UI update
+    // Update bubble text in UI immediately
     const bubble = document.querySelector(`[data-msg-id="${editingMsgId}"]`);
     if (bubble) {
       const textNode = bubble.querySelector('.msg-text');
       if (textNode) textNode.textContent = newText;
 
-      // Add "edited" label if not already there
       if (!bubble.querySelector('.edited-tag')) {
         const tag = document.createElement('span');
-        tag.className = 'edited-tag';
+        tag.className  = 'edited-tag';
         tag.textContent = 'edited';
         bubble.appendChild(tag);
       }
@@ -414,23 +466,20 @@ async function saveEdit() {
 /* ── DELETE action ── */
 ctxDelete.addEventListener('click', async () => {
   if (!activeMsgId) return;
-  const msgId = activeMsgId;
+  const msgId  = activeMsgId;
   const bubble = activeMsgEl;
   hideCtxMenu();
 
-  const confirmed = confirm('Delete this message?');
-  if (!confirmed) return;
+  if (!confirm('Delete this message?')) return;
 
   try {
-    // Delete from Supabase — adjust table name as needed
     const { error } = await db
-      .from('messages')
+      .from('chat_messages')
       .delete()
       .eq('id', msgId);
 
     if (error) throw error;
 
-    // Remove from DOM
     const row = bubble.closest('.msg-row-wrapper') || bubble.parentElement;
     row?.remove();
   } catch (err) {
@@ -438,30 +487,45 @@ ctxDelete.addEventListener('click', async () => {
   }
 });
 
-/* ═══════════════════════════════════════════════
-   EXAMPLE: how to render a message bubble.
-   Call this from your chat.js when a new message arrives.
-   currentUserId = the logged-in user's Supabase UID.
-═══════════════════════════════════════════════ */
-function renderMessage({ id, content, sender_id, edited }) {
-  const currentUserId = db.auth.getUser()?.data?.user?.id; // adjust to your auth pattern
-  const isOwn = sender_id === currentUserId;
+/* ══════════════════════════════════════════
+   renderMessage(row)
+   Call this from chat.js for each message.
+
+   Before calling, set: window.currentUserId = user.id
+
+   row fields:
+     id        — uuid
+     message   — text
+     user_id   — uuid
+     edited    — boolean
+     username  — text (optional, for display)
+══════════════════════════════════════════ */
+function renderMessage(row) {
+  const isOwn = row.user_id === window.currentUserId;
 
   const wrapper = document.createElement('div');
   wrapper.className = 'msg-row-wrapper flex mb-3 ' + (isOwn ? 'justify-end' : 'justify-start');
 
   const bubble = document.createElement('div');
-  bubble.className = 'msg-bubble ' + (isOwn ? 'own' : 'other');
-  bubble.dataset.msgId = id;
+  bubble.className    = 'msg-bubble ' + (isOwn ? 'own' : 'other');
+  bubble.dataset.msgId = row.id;
+
+  // Username (for other people's messages)
+  if (!isOwn && row.username) {
+    const nameEl = document.createElement('div');
+    nameEl.style.cssText = 'font-size:11px;opacity:0.6;margin-bottom:2px;';
+    nameEl.textContent   = row.username;
+    bubble.appendChild(nameEl);
+  }
 
   const textSpan = document.createElement('span');
-  textSpan.className = 'msg-text';
-  textSpan.textContent = content;
+  textSpan.className   = 'msg-text';
+  textSpan.textContent = row.message;
   bubble.appendChild(textSpan);
 
-  if (edited) {
+  if (row.edited) {
     const tag = document.createElement('span');
-    tag.className = 'edited-tag';
+    tag.className   = 'edited-tag';
     tag.textContent = 'edited';
     bubble.appendChild(tag);
   }
@@ -469,8 +533,7 @@ function renderMessage({ id, content, sender_id, edited }) {
   wrapper.appendChild(bubble);
   document.getElementById('messagesContainer').appendChild(wrapper);
 
-  // Attach hold listeners only for own messages
-  attachHoldListeners(bubble, id, isOwn);
+  attachHoldListeners(bubble, row.id, isOwn);
 }
 
 /* ── Logout ── */
@@ -487,3 +550,4 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 </script>
 </body>
 </html>
+
