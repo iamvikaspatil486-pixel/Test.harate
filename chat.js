@@ -1,4 +1,5 @@
-document.addEventListener("DOMContentLoaded", () => {
+
+Document.addEventListener("DOMContentLoaded", () => {
 
 const db = window.db
 
@@ -81,19 +82,15 @@ document.getElementById("cancelReply").addEventListener("click", clearReply)
 /* CONTEXT MENU (hold menu) */
 /* ========================= */
 
-function showContextMenu(msg, bubble) {
-function showContextMenu(msg, bubble) {
+function showContextMenu(msg, bubble, e) {
   if (msg.user_id !== userId) return;
 
-  // 1. Force remove any existing menu
   const existingMenu = document.getElementById("ctxMenu");
   if (existingMenu) existingMenu.remove();
 
-  // 2. Create the menu
   const menu = document.createElement("div");
   menu.id = "ctxMenu";
   
-  // FIXED CSS: Added higher z-index and fixed positioning
   menu.style = `
     position: fixed;
     background: #1e293b;
@@ -104,6 +101,7 @@ function showContextMenu(msg, bubble) {
     min-width: 140px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.6);
     pointer-events: auto;
+    touch-action: none;
   `;
 
   menu.innerHTML = `
@@ -113,26 +111,24 @@ function showContextMenu(msg, bubble) {
 
   document.body.appendChild(menu);
 
-  // 3. IMPROVED POSITIONING LOGIC
   const rect = bubble.getBoundingClientRect();
   const menuWidth = 140;
   const menuHeight = 100;
 
-  let top = rect.top + (rect.height / 2); // Start at middle of bubble
-  let left = rect.left + (rect.width / 2); // Start at middle of bubble
+  // Position menu slightly above the finger/bubble
+  let top = (e.touches ? e.touches[0].clientY : e.clientY) - 80;
+  let left = (e.touches ? e.touches[0].clientX : e.clientX) - 70;
 
-  // Keep menu inside screen boundaries
-  if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 20;
-  if (top + menuHeight > window.innerHeight) top = window.innerHeight - menuHeight - 20;
+  if (left + menuWidth > window.innerWidth) left = window.innerWidth - menuWidth - 10;
+  if (top + menuHeight > window.innerHeight) top = window.innerHeight - menuHeight - 10;
   if (left < 10) left = 10;
   if (top < 10) top = 10;
 
   menu.style.top = top + "px";
   menu.style.left = left + "px";
 
-  // 4. ACTION LISTENERS
-  document.getElementById("ctxEdit").onclick = (e) => {
-    e.stopPropagation();
+  document.getElementById("ctxEdit").onclick = (ev) => {
+    ev.stopPropagation();
     menu.remove();
     const newText = prompt("Edit message:", msg.message);
     if (newText && newText.trim() !== msg.message) {
@@ -140,15 +136,14 @@ function showContextMenu(msg, bubble) {
     }
   };
 
-  document.getElementById("ctxDelete").onclick = (e) => {
-    e.stopPropagation();
+  document.getElementById("ctxDelete").onclick = (ev) => {
+    ev.stopPropagation();
     menu.remove();
     if (confirm("Delete this message?")) {
         deleteMessage(msg.id);
     }
   };
 
-  // 5. CLOSE ON OUTSIDE CLICK
   setTimeout(() => {
     const closeMenu = () => menu.remove();
     window.addEventListener('click', closeMenu, { once: true });
@@ -172,11 +167,9 @@ async function editMessage(msgId, newText, bubble) {
     return
   }
 
-  // Update text on screen
   const msgTextEl = bubble.querySelector(".msgText")
   if (msgTextEl) msgTextEl.textContent = newText
 
-  // Show "edited" label
   let editedLabel = bubble.querySelector(".editedLabel")
   if (!editedLabel) {
     editedLabel = document.createElement("span")
@@ -186,7 +179,6 @@ async function editMessage(msgId, newText, bubble) {
     bubble.appendChild(editedLabel)
   }
 
-  // Update messageMap
   if (messageMap[msgId]) messageMap[msgId].message = newText
 }
 
@@ -226,9 +218,9 @@ OneSignalDeferred.push(async function(OneSignal) {
     try {
       const permission = await OneSignal.Notifications.permission;
       const subId = await OneSignal.User.PushSubscription.id;
-      alert("Permission: " + permission + "\nSubscription ID: " + subId);
+      // alert("Permission: " + permission + "\nSubscription ID: " + subId);
     } catch (e) {
-      alert("Error: " + e.message);
+      console.error("OS Error: " + e.message);
     }
   }, 6000);
 });
@@ -256,7 +248,7 @@ fileInput.addEventListener("change", async (e) => {
   const insertData = { user_id: userId, username, media_url: publicUrl }
   if (replyTo) insertData.reply_to = replyTo.id
 
-  displayMessage({ id: Date.now(), username, media_url: publicUrl, reply_to: replyTo?.id, _replyData: replyTo })
+  displayMessage({ id: Date.now(), username, media_url: publicUrl, reply_to: replyTo?.id, _replyData: replyTo, user_id: userId })
   await db.from("chat_messages").insert(insertData)
   clearReply()
   fileInput.value = ""
@@ -299,17 +291,7 @@ function displayMessage(msg){
     const original = msg._replyData || messageMap[msg.reply_to]
     if (original) {
       replyHTML = `
-        <div style="
-          background:#0f172a;
-          border-left:3px solid #3b82f6;
-          border-radius:6px;
-          padding:5px 8px;
-          margin-bottom:5px;
-          font-size:11px;
-          color:#9ca3af;
-          max-width:100%;
-          overflow:hidden;
-        ">
+        <div style="background:#0f172a;border-left:3px solid #3b82f6;border-radius:6px;padding:5px 8px;margin-bottom:5px;font-size:11px;color:#9ca3af;max-width:100%;overflow:hidden;">
           <span style="color:#3b82f6;font-weight:bold;">${original.username}</span><br>
           <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">
             ${original.message || "📷 Media"}
@@ -323,7 +305,6 @@ function displayMessage(msg){
     ? `<img src="${msg.media_url}" style="max-width:200px;border-radius:10px;margin-top:5px;">`
     : ""
 
-  // Show "edited" label if message was edited
   const editedHTML = msg.is_edited
     ? `<span class="editedLabel" style="font-size:10px;color:#64748b;margin-left:6px;">edited</span>`
     : ""
@@ -340,6 +321,8 @@ function displayMessage(msg){
       position:relative;
       transition: transform 0.2s ease;
       user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
     ">
       ${replyHTML}
       <span class="msgText">${msg.message || ""}</span>
@@ -354,15 +337,18 @@ function displayMessage(msg){
   if (isOwn) {
     let holdTimer = null
 
-    bubble.addEventListener("touchstart", () => {
+    bubble.addEventListener("touchstart", (e) => {
       holdTimer = setTimeout(() => {
+        // Prevent default browser menu
+        if(e.cancelable) e.preventDefault();
         if (navigator.vibrate) navigator.vibrate(40)
-        showContextMenu(msg, bubble)
-      }, 500)
-    }, { passive: true })
+        showContextMenu(msg, bubble, e)
+      }, 600)
+    }, { passive: false })
 
     bubble.addEventListener("touchend", () => clearTimeout(holdTimer))
     bubble.addEventListener("touchmove", () => clearTimeout(holdTimer))
+    bubble.addEventListener("contextmenu", (e) => e.preventDefault()) // Block right-click
   }
 
   /* ---- SWIPE TO REPLY ---- */
@@ -419,6 +405,7 @@ async function sendMessage(){
     username,
     message: text,
     reply_to: replyTo?.id,
+    user_id: userId,
     _replyData: replyTo ? { ...replyTo } : null
   })
 
@@ -478,7 +465,6 @@ db.channel("live-chat")
     const bubble = el.querySelector(".msgBubble")
     const msgTextEl = bubble?.querySelector(".msgText")
     if (msgTextEl) msgTextEl.textContent = msg.message || ""
-    // Add edited label if not already there
     if (!bubble?.querySelector(".editedLabel")) {
       const editedLabel = document.createElement("span")
       editedLabel.className = "editedLabel"
@@ -531,6 +517,7 @@ async function openGifPicker(){
         username,
         media_url: gif.images.fixed_height.url,
         reply_to: replyTo?.id,
+        user_id: userId,
         _replyData: replyTo ? { ...replyTo } : null
       })
 
@@ -556,3 +543,6 @@ input.addEventListener("keydown", e => {
 sendBtn.addEventListener("click", sendMessage)
 
 })
+
+```
+
