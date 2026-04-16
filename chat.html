@@ -3,174 +3,487 @@
 
 <head>
 <meta charset="UTF-8">
-
-<!-- Prevent zooming -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
 <title>AGASTYANS Chat</title>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
-
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
 <script src="supabase.js"></script>
-<script src="notify.js"></script>
 <script src="chat.js"></script>
 
-
 <style>
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html, body {
-    margin: 0;
-    height: 100dvh;
-    display: flex;
-    flex-direction: column;
-    background: #0f172a;
-    font-family: sans-serif;
-    overflow: hidden;
+  margin: 0;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  font-family: sans-serif;
+  overflow: hidden;
 }
 
-/* header */
 .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    color: white;
-    border-bottom: 1px solid #1e293b;
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  color: white;
+  border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
 }
 
-/* messages */
 .messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 15px;
-    padding-bottom: 90px; /* space for bottom chat */
-    color: white;
-    scroll-behavior: smooth;
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  padding-bottom: 90px;
+  color: white;
+  scroll-behavior: smooth;
 }
 
-/* bottom chat */
 .bottom-chat {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    background: #0f172a;
-    border-top: 1px solid #1e293b;
-    padding: 8px 12px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: #0f172a;
+  border-top: 1px solid #1e293b;
+  padding: 8px 12px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-/* icons row */
 .action-row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 
-/* message input row */
 .msg-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .msg-input {
-    flex: 1;
-    min-width: 0;
-    background: #1e293b;
-    border: none;
-    border-radius: 25px;
-    padding: 10px 14px;
-    color: white;
-    outline: none;
+  flex: 1;
+  min-width: 0;
+  background: #1e293b;
+  border: none;
+  border-radius: 25px;
+  padding: 10px 14px;
+  color: white;
+  outline: none;
 }
 
-/* icons */
-.icon {
-    font-size: 22px;
-    color: white;
-    cursor: pointer;
+.icon { font-size: 22px; color: white; cursor: pointer; }
+.send-btn { font-size: 22px; color: #3b82f6; cursor: pointer; }
+#gifBtn { flex-shrink: 0; }
+
+/* ── Message bubble ── */
+.msg-bubble {
+  position: relative;
+  display: inline-block;
+  max-width: 75%;
+  padding: 8px 12px;
+  border-radius: 16px;
+  word-break: break-word;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: pointer;
+  transition: opacity 0.15s;
 }
 
-/* send button */
-.send-btn {
-    font-size: 22px;
-    color: #3b82f6;
-    cursor: pointer;
+.msg-bubble:active { opacity: 0.75; }
+
+.msg-bubble.own {
+  background: #2563eb;
+  color: white;
+  border-bottom-right-radius: 4px;
 }
 
-/* adjust GIF button so it doesn't overlap send */
-#gifBtn {
-    flex-shrink: 0;
+.msg-bubble.other {
+  background: #1e293b;
+  color: white;
+  border-bottom-left-radius: 4px;
 }
 
+/* edited label */
+.edited-tag {
+  font-size: 10px;
+  opacity: 0.6;
+  margin-left: 6px;
+}
+
+/* ── Context Menu ── */
+#ctxMenu {
+  position: fixed;
+  z-index: 9999;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  display: none;
+  min-width: 160px;
+  animation: popIn 0.15s ease;
+}
+
+@keyframes popIn {
+  from { transform: scale(0.85); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 18px;
+  color: white;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.ctx-item:hover { background: #334155; }
+.ctx-item:not(:last-child) { border-bottom: 1px solid #334155; }
+
+.ctx-item.danger { color: #f87171; }
+
+/* ── Edit bar (replaces bottom input area while editing) ── */
+#editBar {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  background: #1e2a3a;
+  border-top: 2px solid #2563eb;
+  padding: 8px 12px;
+  padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+}
+
+#editInput {
+  flex: 1;
+  background: #1e293b;
+  border: none;
+  border-radius: 25px;
+  padding: 10px 14px;
+  color: white;
+  outline: none;
+  font-size: 15px;
+}
+
+.edit-label {
+  font-size: 11px;
+  color: #60a5fa;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0 4px;
+  white-space: nowrap;
+}
+
+#cancelEditBtn {
+  color: #94a3b8;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+#saveEditBtn {
+  color: #3b82f6;
+  font-size: 22px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* Dim overlay when context menu is open */
+#ctxOverlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0,0,0,0.3);
+}
 </style>
-
 </head>
 
 <body>
 
 <!-- HEADER -->
 <div class="header">
-    <button onclick="history.back()">←</button>
-    <h2 class="font-bold">AGASTYANS</h2>
-    <div id="onlineCount"></div>
-    <button id="logoutBtn" class="text-red-400">Logout</button>
+  <button onclick="history.back()">←</button>
+  <h2 class="font-bold">AGASTYANS</h2>
+  <div id="onlineCount"></div>
+  <button id="logoutBtn" class="text-red-400">Logout</button>
 </div>
 
 <!-- MESSAGES -->
-<div class="messages"></div>
+<div class="messages" id="messagesContainer"></div>
 
-<!-- BOTTOM CHAT -->
-<div class="bottom-chat">
-
-    <!-- ICON ROW -->
-    <div class="action-row">
-        <label class="icon">
-            🖼
-            <input type="file" hidden accept="image/*">
-        </label>
-
-        <button id="voiceBtn" class="icon">🎤</button>
-
-        <!-- GIF BUTTON -->
-        <button id="gifBtn" class="icon">GIF</button>
-
-        <!-- SEND BUTTON -->
-        <button id="sendBtn" class="send-btn" style="display:none">➤</button>
-    </div>
-
-    <!-- MESSAGE INPUT -->
-    <div class="msg-row">
-        <input id="msgInput" type="text" placeholder="Message..." class="msg-input" />
-    </div>
-
+<!-- BOTTOM CHAT (normal) -->
+<div class="bottom-chat" id="normalBar">
+  <div class="action-row">
+    <label class="icon">
+      🖼
+      <input type="file" hidden accept="image/*">
+    </label>
+    <button id="voiceBtn" class="icon">🎤</button>
+    <button id="gifBtn" class="icon">GIF</button>
+    <button id="sendBtn" class="send-btn" style="display:none">➤</button>
+  </div>
+  <div class="msg-row">
+    <input id="msgInput" type="text" placeholder="Message..." class="msg-input" />
+  </div>
 </div>
 
-</body>
+<!-- EDIT BAR (shown while editing a message) -->
+<div id="editBar">
+  <button id="cancelEditBtn">✕</button>
+  <span class="edit-label">✏️ Edit</span>
+  <input id="editInput" type="text" placeholder="Edit message..." />
+  <button id="saveEditBtn">➤</button>
+</div>
+
+<!-- CONTEXT MENU OVERLAY -->
+<div id="ctxOverlay"></div>
+
+<!-- CONTEXT MENU -->
+<div id="ctxMenu">
+  <div class="ctx-item" id="ctxEdit">✏️ &nbsp;Edit</div>
+  <div class="ctx-item danger" id="ctxDelete">🗑️ &nbsp;Delete</div>
+</div>
+
 <script>
-  document.getElementById('logoutBtn').addEventListener('click', async () => {
-    const confirmed = confirm('Are you sure you want to logout?');
-    if (!confirmed) return;
+/* ═══════════════════════════════════════════════
+   HOLD-TO-SHOW context menu for own messages
+   Works with touch (long press) and mouse (right-click / long press)
+═══════════════════════════════════════════════ */
 
-    try {
-      const { error } = await db.auth.signOut();
-      if (error) throw error;
+let holdTimer = null;
+let activeMsgEl = null;   // the bubble element
+let activeMsgId = null;   // Supabase message id
+let editingMsgId = null;  // currently being edited
 
-      // Redirect to login page after logout
-      window.location.href = 'index.html'; // change to your login page
-    } catch (err) {
-      alert('Logout failed: ' + err.message);
-    }
+const HOLD_DURATION = 500; // ms
+
+const ctxMenu    = document.getElementById('ctxMenu');
+const ctxOverlay = document.getElementById('ctxOverlay');
+const ctxEdit    = document.getElementById('ctxEdit');
+const ctxDelete  = document.getElementById('ctxDelete');
+const normalBar  = document.getElementById('normalBar');
+const editBar    = document.getElementById('editBar');
+const editInput  = document.getElementById('editInput');
+
+/* ── Show context menu at position ── */
+function showCtxMenu(x, y) {
+  ctxMenu.style.display = 'block';
+  ctxOverlay.style.display = 'block';
+
+  // Keep menu within viewport
+  const mw = 170, mh = 110;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  ctxMenu.style.left = Math.min(x, vw - mw - 8) + 'px';
+  ctxMenu.style.top  = Math.min(y, vh - mh - 8) + 'px';
+}
+
+function hideCtxMenu() {
+  ctxMenu.style.display = 'none';
+  ctxOverlay.style.display = 'none';
+  activeMsgEl = null;
+  activeMsgId = null;
+}
+
+/* ── Attach hold listeners to a bubble ── */
+function attachHoldListeners(bubble, msgId, isOwn) {
+  if (!isOwn) return; // only for sender's messages
+
+  // Touch: long press
+  bubble.addEventListener('touchstart', (e) => {
+    holdTimer = setTimeout(() => {
+      const touch = e.touches[0];
+      activeMsgEl = bubble;
+      activeMsgId = msgId;
+      showCtxMenu(touch.clientX, touch.clientY - 120);
+      navigator.vibrate?.(30); // subtle haptic
+    }, HOLD_DURATION);
+  }, { passive: true });
+
+  bubble.addEventListener('touchend',   () => clearTimeout(holdTimer));
+  bubble.addEventListener('touchmove',  () => clearTimeout(holdTimer));
+  bubble.addEventListener('touchcancel',() => clearTimeout(holdTimer));
+
+  // Mouse: right-click or long press
+  bubble.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    activeMsgEl = bubble;
+    activeMsgId = msgId;
+    showCtxMenu(e.clientX, e.clientY - 80);
   });
-</script>
-</html>
 
+  let mouseHold;
+  bubble.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    mouseHold = setTimeout(() => {
+      activeMsgEl = bubble;
+      activeMsgId = msgId;
+      showCtxMenu(e.clientX, e.clientY - 80);
+    }, HOLD_DURATION);
+  });
+  bubble.addEventListener('mouseup',   () => clearTimeout(mouseHold));
+  bubble.addEventListener('mouseleave',() => clearTimeout(mouseHold));
+}
+
+/* ── Dismiss menu when overlay tapped ── */
+ctxOverlay.addEventListener('click', hideCtxMenu);
+ctxOverlay.addEventListener('touchend', hideCtxMenu);
+
+/* ── EDIT action ── */
+ctxEdit.addEventListener('click', () => {
+  if (!activeMsgEl || !activeMsgId) return;
+
+  // Get current text (excluding the "edited" tag if present)
+  const textNode = activeMsgEl.querySelector('.msg-text');
+  const currentText = textNode ? textNode.textContent : activeMsgEl.textContent.replace('✏️ edited','').trim();
+
+  editingMsgId = activeMsgId;
+  editInput.value = currentText;
+
+  // Show edit bar, hide normal bar
+  normalBar.style.display = 'none';
+  editBar.style.display = 'flex';
+  editInput.focus();
+
+  hideCtxMenu();
+});
+
+/* ── Cancel edit ── */
+document.getElementById('cancelEditBtn').addEventListener('click', cancelEdit);
+
+function cancelEdit() {
+  editingMsgId = null;
+  editBar.style.display = 'none';
+  normalBar.style.display = 'flex';
+}
+
+/* ── Save edit ── */
+document.getElementById('saveEditBtn').addEventListener('click', saveEdit);
+editInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveEdit(); });
+
+async function saveEdit() {
+  const newText = editInput.value.trim();
+  if (!newText || !editingMsgId) return;
+
+  try {
+    // Update in Supabase — adjust table/column names to match your schema
+    const { error } = await db
+      .from('messages')
+      .update({ content: newText, edited: true })
+      .eq('id', editingMsgId);
+
+    if (error) throw error;
+
+    // Optimistic UI update
+    const bubble = document.querySelector(`[data-msg-id="${editingMsgId}"]`);
+    if (bubble) {
+      const textNode = bubble.querySelector('.msg-text');
+      if (textNode) textNode.textContent = newText;
+
+      // Add "edited" label if not already there
+      if (!bubble.querySelector('.edited-tag')) {
+        const tag = document.createElement('span');
+        tag.className = 'edited-tag';
+        tag.textContent = 'edited';
+        bubble.appendChild(tag);
+      }
+    }
+  } catch (err) {
+    alert('Could not edit: ' + err.message);
+  }
+
+  cancelEdit();
+}
+
+/* ── DELETE action ── */
+ctxDelete.addEventListener('click', async () => {
+  if (!activeMsgId) return;
+  const msgId = activeMsgId;
+  const bubble = activeMsgEl;
+  hideCtxMenu();
+
+  const confirmed = confirm('Delete this message?');
+  if (!confirmed) return;
+
+  try {
+    // Delete from Supabase — adjust table name as needed
+    const { error } = await db
+      .from('messages')
+      .delete()
+      .eq('id', msgId);
+
+    if (error) throw error;
+
+    // Remove from DOM
+    const row = bubble.closest('.msg-row-wrapper') || bubble.parentElement;
+    row?.remove();
+  } catch (err) {
+    alert('Could not delete: ' + err.message);
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   EXAMPLE: how to render a message bubble.
+   Call this from your chat.js when a new message arrives.
+   currentUserId = the logged-in user's Supabase UID.
+═══════════════════════════════════════════════ */
+function renderMessage({ id, content, sender_id, edited }) {
+  const currentUserId = db.auth.getUser()?.data?.user?.id; // adjust to your auth pattern
+  const isOwn = sender_id === currentUserId;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'msg-row-wrapper flex mb-3 ' + (isOwn ? 'justify-end' : 'justify-start');
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble ' + (isOwn ? 'own' : 'other');
+  bubble.dataset.msgId = id;
+
+  const textSpan = document.createElement('span');
+  textSpan.className = 'msg-text';
+  textSpan.textContent = content;
+  bubble.appendChild(textSpan);
+
+  if (edited) {
+    const tag = document.createElement('span');
+    tag.className = 'edited-tag';
+    tag.textContent = 'edited';
+    bubble.appendChild(tag);
+  }
+
+  wrapper.appendChild(bubble);
+  document.getElementById('messagesContainer').appendChild(wrapper);
+
+  // Attach hold listeners only for own messages
+  attachHoldListeners(bubble, id, isOwn);
+}
+
+/* ── Logout ── */
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  if (!confirm('Are you sure you want to logout?')) return;
+  try {
+    const { error } = await db.auth.signOut();
+    if (error) throw error;
+    window.location.href = 'index.html';
+  } catch (err) {
+    alert('Logout failed: ' + err.message);
+  }
+});
+</script>
+</body>
+</html>
